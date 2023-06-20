@@ -1,0 +1,700 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<MorpheusModel version="4">
+    <Description>
+        <Details>Without IFNγ inhibition: set l_5 = 1 and l_6 = 1
+With PD-L1-mediated IFNγ inhibition: set l_5 = 0.1
+With TGFβ-mediated IFNγ inhibition: set l_6 = 0.1
+</Details>
+        <Title>short_tgf_uni</Title>
+    </Description>
+    <Space>
+        <Lattice class="square">
+            <Neighborhood>
+                <Order>2</Order>
+            </Neighborhood>
+            <Size value="200, 200, 0" symbol="size"/>
+            <BoundaryConditions>
+                <Condition boundary="x" type="noflux"/>
+                <Condition boundary="y" type="noflux"/>
+                <Condition boundary="-x" type="noflux"/>
+                <Condition boundary="-y" type="noflux"/>
+            </BoundaryConditions>
+        </Lattice>
+        <SpaceSymbol symbol="space"/>
+    </Space>
+    <Time>
+        <StartTime value="0"/>
+        <StopTime value="130"/>
+        <TimeSymbol symbol="time"/>
+    </Time>
+    <Analysis>
+        <Logger time-step="1">
+            <Input>
+                <Symbol symbol-ref="cell.type"/>
+                <Symbol symbol-ref="PM"/>
+                <Symbol symbol-ref="Z"/>
+                <Symbol symbol-ref="gI"/>
+                <Symbol symbol-ref="IFN_nM"/>
+                <Symbol symbol-ref="TGF_nM"/>
+            </Input>
+            <Output>
+                <TextOutput file-format="csv"/>
+            </Output>
+            <Restriction exclude-medium="true"/>
+        </Logger>
+        <Gnuplotter time-step="10" decorate="true">
+            <Terminal name="png"/>
+            <Plot title="Cell type + IFNγ field">
+                <Cells value="cell.type" max="4" opacity="1" min="0">
+                    <ColorMap>
+                        <Color value="1" color="white"/>
+                        <Color value="2" color="salmon"/>
+                        <Color value="3" color="light-green"/>
+                        <Color value="4" color="skyblue"/>
+                        <Color value="5" color="black"/>
+                    </ColorMap>
+                </Cells>
+                <Field symbol-ref="IFN" coarsening="2" min="0.0">
+                    <ColorMap>
+                        <Color value="1.0" color="red"/>
+                        <Color value="0.5" color="yellow"/>
+                        <Color value="0.0" color="white"/>
+                    </ColorMap>
+                </Field>
+            </Plot>
+            <Plot title="TGFβ (nM cell-1)">
+                <Cells value="TGF_nM" max="0.1"/>
+            </Plot>
+            <Plot title="IFNγ prod. rate (molecules min-1)">
+                <Cells value="gI" max="1200"/>
+            </Plot>
+            <Plot title="IFNγ (nM cell-1)">
+                <Cells value="IFN_nM" max="0.35"/>
+            </Plot>
+            <Plot title="PD-L1 membrane (molecules)">
+                <Cells value="PM" max="101500"/>
+            </Plot>
+            <Plot title="ZEB1 (molecules)">
+                <Cells value="Z" max="79000"/>
+            </Plot>
+        </Gnuplotter>
+        <ModelGraph reduced="false" format="svg" include-tags="#untagged"/>
+    </Analysis>
+    <CellTypes>
+        <CellType class="medium" name="medium">
+            <Constant value="2100/113*0.01*0.2" symbol="kIFN"/>
+            <Constant value="0.0" symbol="IFN_nM"/>
+            <Constant value="0.0" symbol="TGF_nM"/>
+            <Constant value="0.0" symbol="PM"/>
+            <Constant value="0.0" symbol="Z"/>
+            <Property value="0.0" symbol="gI"/>
+            <Property value="0.0" symbol="gIFN"/>
+        </CellType>
+        <CellType class="biological" name="epithelial">
+            <Property value="0.0" symbol="Z"/>
+            <Property value="0.0" symbol="mu2"/>
+            <Property value="0.0" symbol="mZ"/>
+            <Property value="0.0" symbol="mF"/>
+            <Property value="0.0" symbol="F"/>
+            <Property value="0.0" symbol="mP"/>
+            <Property value="0.0" symbol="PE"/>
+            <Property value="0.0" symbol="PG"/>
+            <Property value="0.0" symbol="PM"/>
+            <Property value="0.0" symbol="mS"/>
+            <Property value="0.0" symbol="S"/>
+            <Property value="0.0" symbol="IFN_nM"/>
+            <Property value="0.1" symbol="TGF_nM"/>
+            <SurfaceConstraint strength="0.25" target="37.7" mode="surface"/>
+            <VolumeConstraint strength="1" target="113"/>
+            <Property value="0.0" symbol="IFN_local"/>
+            <Mapper name="report field">
+                <Input value="IFN"/>
+                <Output mapping="sum" symbol-ref="IFN_local"/>
+            </Mapper>
+            <Property value="0.0" symbol="gI"/>
+            <Property value="2100/113*0.01" symbol="kIFN"/>
+            <ChangeCellType newCellType="hybrid">
+                <Condition>mZ>=235</Condition>
+            </ChangeCellType>
+            <System time-scaling="30" solver="Dormand-Prince [adaptive, O(5)]">
+                <Constant value="2100" symbol="g_mu2"/>
+                <Constant value="11" symbol="g_mZ"/>
+                <Constant value="100" symbol="g_Z"/>
+                <Constant value="0.0475" symbol="k_mu2"/>
+                <Constant value="0.5" symbol="k_mZ"/>
+                <Constant value="0.1" symbol="k_Z"/>
+                <Constant value="25000" symbol="Z0_1"/>
+                <Constant value="2" symbol="n_1"/>
+                <Constant value="7.5" symbol="l_1"/>
+                <Constant value="220000" symbol="Z0_2"/>
+                <Constant value="3" symbol="n_2"/>
+                <Constant value="0.1" symbol="l_2"/>
+                <Constant value="180000" symbol="S0_3"/>
+                <Constant value="2" symbol="n_3"/>
+                <Constant value="10" symbol="l_3"/>
+                <Constant value="180000" symbol="S0_4"/>
+                <Constant value="2" symbol="n_4"/>
+                <Constant value="0.1" symbol="l_4"/>
+                <Constant value="0.0" symbol="j_mZ_1"/>
+                <Constant value="0.04" symbol="j_mZ_2"/>
+                <Constant value="0.2" symbol="j_mZ_3"/>
+                <Constant value="1" symbol="j_mZ_4"/>
+                <Constant value="1" symbol="j_mZ_5"/>
+                <Constant value="1" symbol="j_mZ_6"/>
+                <Constant value="1" symbol="j_mZ_7"/>
+                <Constant value="0.0" symbol="j_mu2_1"/>
+                <Constant value="0.005" symbol="j_mu2_2"/>
+                <Constant value="0.1" symbol="j_mu2_3"/>
+                <Constant value="1.5" symbol="j_mu2_4"/>
+                <Constant value="2" symbol="j_mu2_5"/>
+                <Constant value="2.5" symbol="j_mu2_6"/>
+                <Constant value="3" symbol="j_mu2_7"/>
+                <Constant value="1" symbol="f_1"/>
+                <Constant value="0.6" symbol="f_2"/>
+                <Constant value="0.3" symbol="f_3"/>
+                <Constant value="0.1" symbol="f_4"/>
+                <Constant value="0.05" symbol="f_5"/>
+                <Constant value="0.05" symbol="f_6"/>
+                <Constant value="0.05" symbol="f_7"/>
+                <Constant value="10000" symbol="mu2_0"/>
+                <Constant value="1.68" symbol="kEG"/>
+                <Constant value="1.8" symbol="kGM"/>
+                <Constant value="0.15" symbol="kPM"/>
+                <Constant value="100" symbol="gP"/>
+                <Constant value="1" symbol="ltP1"/>
+                <Constant value="0.3" symbol="ltP2"/>
+                <Constant value="0.05" symbol="ltP3"/>
+                <Constant value="0.0" symbol="lmumP1"/>
+                <Constant value="0.05" symbol="lmumP2"/>
+                <Constant value="1" symbol="lmumP3"/>
+                <Constant value="0.5" symbol="kmP"/>
+                <Constant value="0.0" symbol="lmP1"/>
+                <Constant value="0.2" symbol="lmP2"/>
+                <Constant value="1" symbol="lmP3"/>
+                <Constant value="30" symbol="gmP"/>
+                <Constant value="10" symbol="lamF"/>
+                <Constant value="3" symbol="nF"/>
+                <Constant value="100000" symbol="F0"/>
+                <Constant value="100" symbol="gF"/>
+                <Constant value="0.1" symbol="kF"/>
+                <Constant value="30" symbol="gmF"/>
+                <Constant value="10" symbol="lamx7"/>
+                <Constant value="10" symbol="nx7"/>
+                <Constant value="2000000" symbol="x70"/>
+                <Constant value="-51.52794" symbol="b"/>
+                <Constant value="414.56394" symbol="d"/>
+                <Constant value="0.02833" symbol="e"/>
+                <Constant value="0.5" symbol="kmF"/>
+                <Constant value="1500" symbol="g0mS"/>
+                <Constant value="600" symbol="gmS"/>
+                <Constant value="0.1" symbol="JmS0"/>
+                <Constant value="4033400" symbol="JmS1"/>
+                <Constant value="0.09" symbol="kmS"/>
+                <Constant value="17" symbol="gS"/>
+                <Constant value="1.66" symbol="kS"/>
+                <Constant value="2" symbol="n_nt"/>
+                <Constant value="1" symbol="n_ns"/>
+                <DiffEqn symbol-ref="Z">
+                    <Expression>g_Z * mZ * Y(mu2_0,f_1,f_2,f_3,f_4,f_5,f_6,f_7) - k_Z * Z</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mu2">
+                    <Expression>g_mu2 * Hs(Z, Z0_2,n_2,l_2) * Hs(S,S0_4,n_4,l_4) - mZ * Y(mu2_0,j_mu2_1,j_mu2_2,j_mu2_3,j_mu2_4,j_mu2_5,j_mu2_6,j_mu2_7) - mP * Y2(mu2_0,lmumP1,lmumP2,lmumP3) - k_mu2 * mu2</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mZ">
+                    <Expression>g_mZ * Hs(Z,Z0_1,n_1,l_1) * Hs(S,S0_3,n_3,l_3) - mZ * Y(mu2_0,j_mZ_1,j_mZ_2,j_mZ_3,j_mZ_4,j_mZ_5,j_mZ_6,j_mZ_7) - k_mZ * mZ</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mF">
+                    <Expression>gmF*Hs(x7,x70,nx7,lamx7)-kmF*mF</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="F">
+                    <Expression>gF * mF - kF*F</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mP">
+                    <Expression>gmP * Hs(F,F0,nF,lamF) - mP * Y2(mu2_0,lmP1,lmP2,lmP3) - kmP * mP</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PE">
+                    <Expression>gP * mP*Y2(mu2_0,ltP1,ltP2,ltP3) - kEG*PE</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PG">
+                    <Expression>kEG*PE-kGM*PG</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PM">
+                    <Expression>kGM*PG-kPM*PM</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mS">
+                    <Expression>g0mS + gmS*(TGF_nM/JmS0)^n_nt/(1+(TGF_nM/JmS0)^n_nt)*1/(1+(S/JmS1)^n_ns) - kmS*mS</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="S">
+                    <Expression>gS*mS - kS*S</Expression>
+                </DiffEqn>
+                <Function symbol="Y2">
+                    <Expression>j1/(1+mu2/mu0)^2+j2*(mu2/mu0)/(1+mu2/mu0)^2*2 +j3*(mu2/mu0)^2/(1+mu2/mu0)^2</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                </Function>
+                <Function symbol="Y">
+                    <Expression>j1/(1+mu2/mu0)^6+j2*(mu2/mu0)/(1+mu2/mu0)^6*6 +j3*(mu2/mu0)^2/(1+mu2/mu0)^6*15+j4*(mu2/mu0)^3/(1+mu2/mu0)^6*20+j5*(mu2/mu0)^4/(1+mu2/mu0)^6*15+j6*(mu2/mu0)^5/(1+mu2/mu0)^6*6+j7*(mu2/mu0)^6/(1+mu2/mu0)^6</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                    <Parameter symbol="j4"/>
+                    <Parameter symbol="j5"/>
+                    <Parameter symbol="j6"/>
+                    <Parameter symbol="j7"/>
+                </Function>
+                <Function symbol="Hs">
+                    <Expression>(1-l)/(1+(B/B0)^nB)+l</Expression>
+                    <Parameter symbol="B"/>
+                    <Parameter symbol="B0"/>
+                    <Parameter symbol="nB"/>
+                    <Parameter symbol="l"/>
+                </Function>
+                <Function symbol="x7">
+                    <Expression>6020*((d)*exp(-exp(b*(IFN_nM-e))))</Expression>
+                </Function>
+            </System>
+            <Equation symbol-ref="IFN_nM">
+                <Expression>IFN_local*0.0002294176894*0.6</Expression>
+            </Equation>
+            <Property value="0.0" symbol="gIFN"/>
+        </CellType>
+        <CellType class="biological" name="hybrid">
+            <Property value="0.0" symbol="Z"/>
+            <Property value="0.0" symbol="mu2"/>
+            <Property value="0.0" symbol="mZ"/>
+            <Property value="0.0" symbol="mF"/>
+            <Property value="0.0" symbol="F"/>
+            <Property value="0.0" symbol="mP"/>
+            <Property value="0.0" symbol="PE"/>
+            <Property value="0.0" symbol="PG"/>
+            <Property value="0.0" symbol="PM"/>
+            <Property value="0.0" symbol="mS"/>
+            <Property value="0.0" symbol="S"/>
+            <Property value="0.0" symbol="IFN_nM"/>
+            <Property value="0.1" symbol="TGF_nM"/>
+            <SurfaceConstraint strength="0.2" target="37.7" mode="surface"/>
+            <VolumeConstraint strength="1" target="113"/>
+            <Property value="0.0" symbol="IFN_local"/>
+            <Mapper name="report field">
+                <Input value="IFN"/>
+                <Output mapping="sum" symbol-ref="IFN_local"/>
+            </Mapper>
+            <Property value="0.0" symbol="gI"/>
+            <Property value="2100/113*0.01" symbol="kIFN"/>
+            <ChangeCellType newCellType="mesenchymal">
+                <Condition>mZ>=715</Condition>
+            </ChangeCellType>
+            <ChangeCellType newCellType="epithelial">
+                <Condition>mZ&lt;=145</Condition>
+            </ChangeCellType>
+            <System time-scaling="30" solver="Dormand-Prince [adaptive, O(5)]">
+                <Constant value="2100" symbol="g_mu2"/>
+                <Constant value="11" symbol="g_mZ"/>
+                <Constant value="100" symbol="g_Z"/>
+                <Constant value="0.0475" symbol="k_mu2"/>
+                <Constant value="0.5" symbol="k_mZ"/>
+                <Constant value="0.1" symbol="k_Z"/>
+                <Constant value="25000" symbol="Z0_1"/>
+                <Constant value="2" symbol="n_1"/>
+                <Constant value="7.5" symbol="l_1"/>
+                <Constant value="220000" symbol="Z0_2"/>
+                <Constant value="3" symbol="n_2"/>
+                <Constant value="0.1" symbol="l_2"/>
+                <Constant value="180000" symbol="S0_3"/>
+                <Constant value="2" symbol="n_3"/>
+                <Constant value="10" symbol="l_3"/>
+                <Constant value="180000" symbol="S0_4"/>
+                <Constant value="2" symbol="n_4"/>
+                <Constant value="0.1" symbol="l_4"/>
+                <Constant value="0.0" symbol="j_mZ_1"/>
+                <Constant value="0.04" symbol="j_mZ_2"/>
+                <Constant value="0.2" symbol="j_mZ_3"/>
+                <Constant value="1" symbol="j_mZ_4"/>
+                <Constant value="1" symbol="j_mZ_5"/>
+                <Constant value="1" symbol="j_mZ_6"/>
+                <Constant value="1" symbol="j_mZ_7"/>
+                <Constant value="0.0" symbol="j_mu2_1"/>
+                <Constant value="0.005" symbol="j_mu2_2"/>
+                <Constant value="0.1" symbol="j_mu2_3"/>
+                <Constant value="1.5" symbol="j_mu2_4"/>
+                <Constant value="2" symbol="j_mu2_5"/>
+                <Constant value="2.5" symbol="j_mu2_6"/>
+                <Constant value="3" symbol="j_mu2_7"/>
+                <Constant value="1" symbol="f_1"/>
+                <Constant value="0.6" symbol="f_2"/>
+                <Constant value="0.3" symbol="f_3"/>
+                <Constant value="0.1" symbol="f_4"/>
+                <Constant value="0.05" symbol="f_5"/>
+                <Constant value="0.05" symbol="f_6"/>
+                <Constant value="0.05" symbol="f_7"/>
+                <Constant value="10000" symbol="mu2_0"/>
+                <Constant value="1.68" symbol="kEG"/>
+                <Constant value="1.8" symbol="kGM"/>
+                <Constant value="0.15" symbol="kPM"/>
+                <Constant value="100" symbol="gP"/>
+                <Constant value="1" symbol="ltP1"/>
+                <Constant value="0.3" symbol="ltP2"/>
+                <Constant value="0.05" symbol="ltP3"/>
+                <Constant value="0.0" symbol="lmumP1"/>
+                <Constant value="0.05" symbol="lmumP2"/>
+                <Constant value="1" symbol="lmumP3"/>
+                <Constant value="0.5" symbol="kmP"/>
+                <Constant value="0.0" symbol="lmP1"/>
+                <Constant value="0.2" symbol="lmP2"/>
+                <Constant value="1" symbol="lmP3"/>
+                <Constant value="30" symbol="gmP"/>
+                <Constant value="10" symbol="lamF"/>
+                <Constant value="3" symbol="nF"/>
+                <Constant value="100000" symbol="F0"/>
+                <Constant value="100" symbol="gF"/>
+                <Constant value="0.1" symbol="kF"/>
+                <Constant value="30" symbol="gmF"/>
+                <Constant value="10" symbol="lamx7"/>
+                <Constant value="10" symbol="nx7"/>
+                <Constant value="2000000" symbol="x70"/>
+                <Constant value="-51.52794" symbol="b"/>
+                <Constant value="414.56394" symbol="d"/>
+                <Constant value="0.02833" symbol="e"/>
+                <Constant value="0.5" symbol="kmF"/>
+                <Constant value="1500" symbol="g0mS"/>
+                <Constant value="600" symbol="gmS"/>
+                <Constant value="0.1" symbol="JmS0"/>
+                <Constant value="4033400" symbol="JmS1"/>
+                <Constant value="0.09" symbol="kmS"/>
+                <Constant value="17" symbol="gS"/>
+                <Constant value="1.66" symbol="kS"/>
+                <Constant value="2" symbol="n_nt"/>
+                <Constant value="1" symbol="n_ns"/>
+                <DiffEqn symbol-ref="Z">
+                    <Expression>g_Z * mZ * Y(mu2_0,f_1,f_2,f_3,f_4,f_5,f_6,f_7) - k_Z * Z</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mu2">
+                    <Expression>g_mu2 * Hs(Z, Z0_2,n_2,l_2) * Hs(S,S0_4,n_4,l_4) - mZ * Y(mu2_0,j_mu2_1,j_mu2_2,j_mu2_3,j_mu2_4,j_mu2_5,j_mu2_6,j_mu2_7) - mP * Y2(mu2_0,lmumP1,lmumP2,lmumP3) - k_mu2 * mu2</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mZ">
+                    <Expression>g_mZ * Hs(Z,Z0_1,n_1,l_1) * Hs(S,S0_3,n_3,l_3) - mZ * Y(mu2_0,j_mZ_1,j_mZ_2,j_mZ_3,j_mZ_4,j_mZ_5,j_mZ_6,j_mZ_7) - k_mZ * mZ</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mF">
+                    <Expression>gmF*Hs(x7,x70,nx7,lamx7)-kmF*mF</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="F">
+                    <Expression>gF * mF - kF*F</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mP">
+                    <Expression>gmP * Hs(F,F0,nF,lamF) - mP * Y2(mu2_0,lmP1,lmP2,lmP3) - kmP * mP</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PE">
+                    <Expression>gP * mP*Y2(mu2_0,ltP1,ltP2,ltP3) - kEG*PE</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PG">
+                    <Expression>kEG*PE-kGM*PG</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PM">
+                    <Expression>kGM*PG-kPM*PM</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mS">
+                    <Expression>g0mS + gmS*(TGF_nM/JmS0)^n_nt/(1+(TGF_nM/JmS0)^n_nt)*1/(1+(S/JmS1)^n_ns) - kmS*mS</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="S">
+                    <Expression>gS*mS - kS*S</Expression>
+                </DiffEqn>
+                <Function symbol="Y2">
+                    <Expression>j1/(1+mu2/mu0)^2+j2*(mu2/mu0)/(1+mu2/mu0)^2*2 +j3*(mu2/mu0)^2/(1+mu2/mu0)^2</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                </Function>
+                <Function symbol="Y">
+                    <Expression>j1/(1+mu2/mu0)^6+j2*(mu2/mu0)/(1+mu2/mu0)^6*6 +j3*(mu2/mu0)^2/(1+mu2/mu0)^6*15+j4*(mu2/mu0)^3/(1+mu2/mu0)^6*20+j5*(mu2/mu0)^4/(1+mu2/mu0)^6*15+j6*(mu2/mu0)^5/(1+mu2/mu0)^6*6+j7*(mu2/mu0)^6/(1+mu2/mu0)^6</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                    <Parameter symbol="j4"/>
+                    <Parameter symbol="j5"/>
+                    <Parameter symbol="j6"/>
+                    <Parameter symbol="j7"/>
+                </Function>
+                <Function symbol="Hs">
+                    <Expression>(1-l)/(1+(B/B0)^nB)+l</Expression>
+                    <Parameter symbol="B"/>
+                    <Parameter symbol="B0"/>
+                    <Parameter symbol="nB"/>
+                    <Parameter symbol="l"/>
+                </Function>
+                <Function symbol="x7">
+                    <Expression>6020*((d)*exp(-exp(b*(IFN_nM-e))))</Expression>
+                </Function>
+            </System>
+            <Equation symbol-ref="IFN_nM">
+                <Expression>IFN_local*0.0002294176894*0.6</Expression>
+            </Equation>
+            <Property value="0.0" symbol="gIFN"/>
+        </CellType>
+        <CellType class="biological" name="mesenchymal">
+            <Property value="0.0" symbol="Z"/>
+            <Property value="0.0" symbol="mu2"/>
+            <Property value="0" symbol="mZ"/>
+            <Property value="0.0" symbol="mF"/>
+            <Property value="0.0" symbol="F"/>
+            <Property value="0.0" symbol="mP"/>
+            <Property value="0.0" symbol="PE"/>
+            <Property value="0.0" symbol="PG"/>
+            <Property value="0.0" symbol="PM"/>
+            <Property value="0.0" symbol="mS"/>
+            <Property value="0.0" symbol="S"/>
+            <Property value="0.0" symbol="IFN_nM"/>
+            <Property value="0.1" symbol="TGF_nM"/>
+            <SurfaceConstraint strength="0.15" target="37.7" mode="surface"/>
+            <VolumeConstraint strength="1" target="113"/>
+            <Property value="0.0" symbol="IFN_local"/>
+            <Mapper name="report field">
+                <Input value="IFN"/>
+                <Output mapping="sum" symbol-ref="IFN_local"/>
+            </Mapper>
+            <Property value="0.0" symbol="gI"/>
+            <Property value="2100/113*0.01" symbol="kIFN"/>
+            <ChangeCellType newCellType="epithelial">
+                <Condition>mZ&lt;=370</Condition>
+            </ChangeCellType>
+            <System time-scaling="30" solver="Dormand-Prince [adaptive, O(5)]">
+                <Constant value="2100" symbol="g_mu2"/>
+                <Constant value="11" symbol="g_mZ"/>
+                <Constant value="100" symbol="g_Z"/>
+                <Constant value="0.0475" symbol="k_mu2"/>
+                <Constant value="0.5" symbol="k_mZ"/>
+                <Constant value="0.1" symbol="k_Z"/>
+                <Constant value="25000" symbol="Z0_1"/>
+                <Constant value="2" symbol="n_1"/>
+                <Constant value="7.5" symbol="l_1"/>
+                <Constant value="220000" symbol="Z0_2"/>
+                <Constant value="3" symbol="n_2"/>
+                <Constant value="0.1" symbol="l_2"/>
+                <Constant value="180000" symbol="S0_3"/>
+                <Constant value="2" symbol="n_3"/>
+                <Constant value="10" symbol="l_3"/>
+                <Constant value="180000" symbol="S0_4"/>
+                <Constant value="2" symbol="n_4"/>
+                <Constant value="0.1" symbol="l_4"/>
+                <Constant value="0.0" symbol="j_mZ_1"/>
+                <Constant value="0.04" symbol="j_mZ_2"/>
+                <Constant value="0.2" symbol="j_mZ_3"/>
+                <Constant value="1" symbol="j_mZ_4"/>
+                <Constant value="1" symbol="j_mZ_5"/>
+                <Constant value="1" symbol="j_mZ_6"/>
+                <Constant value="1" symbol="j_mZ_7"/>
+                <Constant value="0.0" symbol="j_mu2_1"/>
+                <Constant value="0.005" symbol="j_mu2_2"/>
+                <Constant value="0.1" symbol="j_mu2_3"/>
+                <Constant value="1.5" symbol="j_mu2_4"/>
+                <Constant value="2" symbol="j_mu2_5"/>
+                <Constant value="2.5" symbol="j_mu2_6"/>
+                <Constant value="3" symbol="j_mu2_7"/>
+                <Constant value="1" symbol="f_1"/>
+                <Constant value="0.6" symbol="f_2"/>
+                <Constant value="0.3" symbol="f_3"/>
+                <Constant value="0.1" symbol="f_4"/>
+                <Constant value="0.05" symbol="f_5"/>
+                <Constant value="0.05" symbol="f_6"/>
+                <Constant value="0.05" symbol="f_7"/>
+                <Constant value="10000" symbol="mu2_0"/>
+                <Constant value="1.68" symbol="kEG"/>
+                <Constant value="1.8" symbol="kGM"/>
+                <Constant value="0.15" symbol="kPM"/>
+                <Constant value="100" symbol="gP"/>
+                <Constant value="1" symbol="ltP1"/>
+                <Constant value="0.3" symbol="ltP2"/>
+                <Constant value="0.05" symbol="ltP3"/>
+                <Constant value="0.0" symbol="lmumP1"/>
+                <Constant value="0.05" symbol="lmumP2"/>
+                <Constant value="1" symbol="lmumP3"/>
+                <Constant value="0.5" symbol="kmP"/>
+                <Constant value="0.0" symbol="lmP1"/>
+                <Constant value="0.2" symbol="lmP2"/>
+                <Constant value="1" symbol="lmP3"/>
+                <Constant value="30" symbol="gmP"/>
+                <Constant value="10" symbol="lamF"/>
+                <Constant value="3" symbol="nF"/>
+                <Constant value="100000" symbol="F0"/>
+                <Constant value="100" symbol="gF"/>
+                <Constant value="0.1" symbol="kF"/>
+                <Constant value="30" symbol="gmF"/>
+                <Constant value="10" symbol="lamx7"/>
+                <Constant value="10" symbol="nx7"/>
+                <Constant value="2000000" symbol="x70"/>
+                <Constant value="-51.52794" symbol="b"/>
+                <Constant value="414.56394" symbol="d"/>
+                <Constant value="0.02833" symbol="e"/>
+                <Constant value="0.5" symbol="kmF"/>
+                <Constant value="1500" symbol="g0mS"/>
+                <Constant value="600" symbol="gmS"/>
+                <Constant value="0.1" symbol="JmS0"/>
+                <Constant value="4033400" symbol="JmS1"/>
+                <Constant value="0.09" symbol="kmS"/>
+                <Constant value="17" symbol="gS"/>
+                <Constant value="1.66" symbol="kS"/>
+                <Constant value="2" symbol="n_nt"/>
+                <Constant value="1" symbol="n_ns"/>
+                <DiffEqn symbol-ref="Z">
+                    <Expression>g_Z * mZ * Y(mu2_0,f_1,f_2,f_3,f_4,f_5,f_6,f_7) - k_Z * Z</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mu2">
+                    <Expression>g_mu2 * Hs(Z, Z0_2,n_2,l_2) * Hs(S,S0_4,n_4,l_4) - mZ * Y(mu2_0,j_mu2_1,j_mu2_2,j_mu2_3,j_mu2_4,j_mu2_5,j_mu2_6,j_mu2_7) - mP * Y2(mu2_0,lmumP1,lmumP2,lmumP3) - k_mu2 * mu2</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mZ">
+                    <Expression>g_mZ * Hs(Z,Z0_1,n_1,l_1) * Hs(S,S0_3,n_3,l_3) - mZ * Y(mu2_0,j_mZ_1,j_mZ_2,j_mZ_3,j_mZ_4,j_mZ_5,j_mZ_6,j_mZ_7) - k_mZ * mZ</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mF">
+                    <Expression>gmF*Hs(x7,x70,nx7,lamx7)-kmF*mF</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="F">
+                    <Expression>gF * mF - kF*F</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mP">
+                    <Expression>gmP * Hs(F,F0,nF,lamF) - mP * Y2(mu2_0,lmP1,lmP2,lmP3) - kmP * mP</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PE">
+                    <Expression>gP * mP*Y2(mu2_0,ltP1,ltP2,ltP3) - kEG*PE</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PG">
+                    <Expression>kEG*PE-kGM*PG</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PM">
+                    <Expression>kGM*PG-kPM*PM</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mS">
+                    <Expression>g0mS + gmS*(TGF_nM/JmS0)^n_nt/(1+(TGF_nM/JmS0)^n_nt)*1/(1+(S/JmS1)^n_ns) - kmS*mS</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="S">
+                    <Expression>gS*mS - kS*S</Expression>
+                </DiffEqn>
+                <Function symbol="Y2">
+                    <Expression>j1/(1+mu2/mu0)^2+j2*(mu2/mu0)/(1+mu2/mu0)^2*2 +j3*(mu2/mu0)^2/(1+mu2/mu0)^2</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                </Function>
+                <Function symbol="Y">
+                    <Expression>j1/(1+mu2/mu0)^6+j2*(mu2/mu0)/(1+mu2/mu0)^6*6 +j3*(mu2/mu0)^2/(1+mu2/mu0)^6*15+j4*(mu2/mu0)^3/(1+mu2/mu0)^6*20+j5*(mu2/mu0)^4/(1+mu2/mu0)^6*15+j6*(mu2/mu0)^5/(1+mu2/mu0)^6*6+j7*(mu2/mu0)^6/(1+mu2/mu0)^6</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                    <Parameter symbol="j4"/>
+                    <Parameter symbol="j5"/>
+                    <Parameter symbol="j6"/>
+                    <Parameter symbol="j7"/>
+                </Function>
+                <Function symbol="Hs">
+                    <Expression>(1-l)/(1+(B/B0)^nB)+l</Expression>
+                    <Parameter symbol="B"/>
+                    <Parameter symbol="B0"/>
+                    <Parameter symbol="nB"/>
+                    <Parameter symbol="l"/>
+                </Function>
+                <Function symbol="x7">
+                    <Expression>6020*((d)*exp(-exp(b*(IFN_nM-e))))</Expression>
+                </Function>
+            </System>
+            <Equation symbol-ref="IFN_nM">
+                <Expression>IFN_local*0.0002294176894*0.6</Expression>
+            </Equation>
+            <Property value="0.0" symbol="gIFN"/>
+        </CellType>
+        <CellType class="biological" name="T-cell">
+            <SurfaceConstraint strength="0.1" target="20.97" mode="surface"/>
+            <VolumeConstraint strength="1" target="35"/>
+            <Property value="0" symbol="gIFN"/>
+            <Property value="0.0" symbol="gI"/>
+            <Property value="0.0" symbol="kIFN"/>
+            <Protrusion field="Act" strength="20" maximum="20" name="Act"/>
+            <Property value="0.0" symbol="IFN_nM"/>
+            <Property value="0.0" symbol="PM"/>
+            <Property value="0.0" symbol="Z"/>
+            <Property value="0.0" symbol="PM_local"/>
+            <Property value="0.0" symbol="TGF_local"/>
+            <Property value="0" symbol="TGF_nM"/>
+            <Property value="0.1" symbol="T_nM"/>
+            <NeighborhoodReporter>
+                <Input value="PM" scaling="length"/>
+                <Output mapping="average" symbol-ref="PM_local"/>
+            </NeighborhoodReporter>
+            <ConnectivityConstraint/>
+            <Property value="1" symbol="l_5"/>
+            <Property value="60000" symbol="PM0_5"/>
+            <Property value="2" symbol="n_5"/>
+            <Equation symbol-ref="gI">
+                <Expression>1200*((1-l_5)/(1+(PM_local/PM0_5)^n_5)+l_5)*((1-l_6)/(1+(T_nM/T0_6)^n_6)+l_6)</Expression>
+            </Equation>
+            <Property value="1" symbol="l_6"/>
+            <Property value="0.1" symbol="T0_6"/>
+            <Property value="2" symbol="n_6"/>
+            <FreezeMotion>
+                <Condition>if(time&lt;=10,1,0)</Condition>
+            </FreezeMotion>
+            <System solver="Dormand-Prince [adaptive, O(5)]">
+                <Rule symbol-ref="gIFN">
+                    <Expression>if(time&lt;=10, 0, gI/cell.volume)</Expression>
+                </Rule>
+            </System>
+        </CellType>
+    </CellTypes>
+    <Global>
+        <Field value="0" symbol="IFN">
+            <Diffusion rate="13.575"/>
+        </Field>
+        <Field value="0.0" symbol="Act"/>
+        <System solver="Dormand-Prince [adaptive, O(5)]">
+            <DiffEqn symbol-ref="IFN">
+                <Expression>gIFN - kIFN*IFN</Expression>
+            </DiffEqn>
+        </System>
+    </Global>
+    <CPM>
+        <ShapeSurface scaling="norm">
+            <Neighborhood>
+                <Order>2</Order>
+            </Neighborhood>
+        </ShapeSurface>
+        <Interaction>
+            <Contact value="2" type2="epithelial" type1="epithelial"/>
+            <Contact value="5" type2="hybrid" type1="epithelial"/>
+            <Contact value="5" type2="mesenchymal" type1="epithelial"/>
+            <Contact value="14" type2="hybrid" type1="hybrid"/>
+            <Contact value="14" type2="mesenchymal" type1="hybrid"/>
+            <Contact value="14" type2="mesenchymal" type1="mesenchymal"/>
+            <Contact value="3" type2="medium" type1="epithelial"/>
+            <Contact value="1" type2="medium" type1="hybrid"/>
+            <Contact value="1" type2="medium" type1="mesenchymal"/>
+            <Contact value="15" type2="medium" type1="T-cell"/>
+            <Contact value="0.5" type2="epithelial" type1="T-cell"/>
+            <Contact value="0.5" type2="hybrid" type1="T-cell"/>
+            <Contact value="0.5" type2="mesenchymal" type1="T-cell"/>
+            <Contact value="0.5" type2="T-cell" type1="T-cell"/>
+        </Interaction>
+        <MonteCarloSampler stepper="edgelist">
+            <MCSDuration value="0.01"/>
+            <Neighborhood>
+                <Order>2</Order>
+            </Neighborhood>
+            <MetropolisKinetics temperature="1"/>
+        </MonteCarloSampler>
+    </CPM>
+    <CellPopulations>
+        <Population type="epithelial" size="1">
+            <InitRectangle mode="regular" number-of-cells="200">
+                <Dimensions origin="100, 10, 0.0" size="100, 190, 1.0"/>
+            </InitRectangle>
+        </Population>
+        <Population type="T-cell" size="1">
+            <InitRectangle mode="random" number-of-cells="5">
+                <Dimensions origin="110, 10, 0.0" size="50, 190, 1"/>
+            </InitRectangle>
+        </Population>
+    </CellPopulations>
+</MorpheusModel>

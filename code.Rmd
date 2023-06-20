@@ -1,0 +1,1776 @@
+---
+title: "Figures for Tumor-Mediated Immunosuppression and Cytokine Spreading Affects the Relation Between EMT and PD-L1 Status"
+author: "Carlijn Lems & Gerhard Burger"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+knitr::opts_chunk$set(tar_interactive = F)
+```
+
+# Packages
+
+```{r, results='hide'}
+packages <- c("rootSolve", "cowplot", "magick", "colorblindr", "tidyverse", "conicfit", "imager", "fs", "plotrix")
+lapply(packages, require, character.only = TRUE)
+```
+
+# Globals
+
+```{r}
+theme_set(theme_cowplot())
+text_size <- 15
+label_size <- round(text_size*1.5)
+
+okabe_ito_colors <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999")
+gradient_colors <- colorRampPalette(okabe_ito_colors[c(4,3)])(5)
+```
+
+# Utilities
+
+```{r}
+# determine bifurcation points
+determine_BP <- function(df, xvar, yvar, res = "y") {
+  sf <- splinefun(df[[yvar]], df[[xvar]], method = "natural", ties = mean)
+  roots  <- rootSolve::uniroot.all(sf, interval = c(min(df[[yvar]]), max(df[[yvar]])), deriv = 1)
+  if(res == "y") return(roots)
+  else if(res == "x") return(sf(roots))
+  else stop("invalid option for res")
+}
+# determine bifurcation points of 'island'
+determine_BP_island <- function(df, xvar, yvar) { 
+  xy = array(c(df[[xvar]],df[[yvar]]), dim=c(length(df[[yvar]]),2))
+  ellipDirect <- EllipseDirectFit(xy)
+  ellipDirectG <- AtoG(ellipDirect)$ParG
+  roots <- c(ellipDirectG[1]-ellipDirectG[4],ellipDirectG[1]+ellipDirectG[4])
+  return(roots)
+}
+bp_to_tibble <- function(bp) {
+  tibble(value = bp) %>% 
+    mutate(name = paste0("BP", seq_along(bp))) %>%
+    pivot_wider()
+}
+# read copasi
+read_copasi <- function(x) {
+  suppressWarnings(read_tsv(x, col_types = cols())) %>% 
+    select(where(is.numeric))
+}
+# read morpheus
+read_morpheus <- function(x) {
+  suppressWarnings(read_tsv(x, col_types = cols()))
+}
+```
+
+# Figures
+
+## 1. PD-L1-mediated IFNγ inhibition
+
+### Schematic overview
+
+```{r}
+ifn_inh_pdl <- load.image("data/inkscape/ifn_inh_pdl_nf.png")
+ifn_inh_pdl_image <- ggplot() + theme(line = element_blank())
+ifn_inh_pdl_image <- ggdraw(ifn_inh_pdl_image) + draw_image(ifn_inh_pdl, x = -0.2, y = -0.1, width = 1.3, height = 1.3)
+```
+
+### Data
+
+```{r}
+twod_copasi <- read_copasi("data/copasi_data/bifs/ifn_inh_pdl_2d_bif.txt")
+twod_copasi_nf <- read_copasi("data/copasi_data/bifs/ifn_inh_pdl_nf_2d_bif.txt")
+
+g_I_cont <- read_copasi("data/copasi_data/bifs/ifn_inh_pdl_ifn_bif.txt")
+g_I_cont_nf <- read_copasi("data/copasi_data/bifs/ifn_inh_pdl_nf_ifn_bif.txt")
+```
+
+### SNAIL1 bifurcations
+
+```{r}
+data <- twod_copasi %>% filter(`(R21 - production I).g_I` == 0.1)
+
+data_nf <- twod_copasi_nf %>% filter(`(R21 - production I).g_I` == 0.1)
+bp = determine_BP(data_nf, "# Values[S].InitialValue", "[mZ]")
+data_nf = data_nf %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+# PD-L1
+
+PM_smooth <- spline(data$`[PM]`, data$`# Values[S].InitialValue`, n = 10*length(data$`[PM]`))
+PM_smooth <- tibble(`[PM]` = PM_smooth$x, `# Values[S].InitialValue` = PM_smooth$y)
+bp = determine_BP(PM_smooth, "# Values[S].InitialValue", "[PM]")
+PM_smooth <- PM_smooth %>% mutate(interval = findInterval(`[PM]`, bp))
+
+data_PM <- tribble(
+  ~experiment, ~data,
+  "no_nf", PM_smooth,
+  "nf", data_nf, 
+) %>%
+  rowwise() %>%
+  unnest(cols = data)
+
+exp_order <- c("no_nf", "nf")
+exp_labels <- c(expression(paste('No IFN', gamma, ' inhibition')),
+                expression(paste('Inhibition of IFN', gamma, ' by PD-L1'))
+                ) %>% setNames(exp_order)
+
+plot_data_PM <- data_PM %>% mutate(experiment = factor(experiment, levels = exp_order))
+plot_data_PM <- plot_data_PM %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"),
+                          labels = c("E", "Unstable 1", "E/M", "Unstable 2", "M", "M", "M")))
+
+xmin = 1.7
+xmax = 2.3
+
+plot_data_PM %>%
+  ggplot(aes(`# Values[S].InitialValue`/1e5, `[PM]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) + 
+  geom_line(size = 1.2) + 
+  geom_vline(xintercept = 1.95, linetype = "dashed") + 
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('SNAIL1 (10'^'5', ' molecules)')), y = 'PD-L1 membrane (molecules)') +
+  coord_cartesian(xlim = c(xmin,xmax), ylim = c(0, 3.2e5)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) -> bif_S_PM
+
+legend_bif_S_PM <- get_legend(bif_S_PM + guides(linetype = "none"))
+
+# ZEB1 mRNA
+
+mZ_smooth <- spline(data$`[mZ]`, data$`# Values[S].InitialValue`, n = 10*length(data$`[mZ]`))
+mZ_smooth <- tibble(`[mZ]` = mZ_smooth$x, `# Values[S].InitialValue` = mZ_smooth$y)
+bp = determine_BP(mZ_smooth, "# Values[S].InitialValue", "[mZ]")
+mZ_smooth <- mZ_smooth %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_mZ <- tribble(
+  ~experiment, ~data,
+  "no_nf", mZ_smooth,
+  "nf", data_nf, 
+) %>%
+  rowwise() %>%
+  unnest(cols = data)
+
+plot_data_mZ <- data_mZ %>% mutate(experiment = factor(experiment, levels = exp_order))
+plot_data_mZ <- plot_data_mZ %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"),
+                          labels = c("E", "Unstable 1", "E/M", "Unstable 2", "M", "M", "M")))
+
+plot_data_mZ %>%
+  ggplot(aes(`# Values[S].InitialValue`/1e5, `[mZ]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) + 
+  geom_line(size = 1.2) + 
+  geom_vline(xintercept = 1.95, linetype = "dashed") +
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('SNAIL1 (10'^'5', ' molecules)')), y = 'ZEB1 mRNA (molecules)') + 
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) + 
+  expand_limits(y = 0) -> bif_S_mZ
+
+legend_bif_S_mZ <- get_legend(bif_S_mZ + guides(linetype = "none"))
+```
+
+### IFNγ bifurcation
+
+```{r}
+data <- tribble(
+  ~experiment, ~data,
+  "no_nf", g_I_cont,
+  "nf", g_I_cont_nf,
+) %>% 
+  rowwise() %>%
+  mutate(
+    bp = list(determine_BP(data, "# (R21 - production I).g_I", "[mZ]")),
+    data = list(data %>% mutate(interval = findInterval(`[mZ]`, bp)))
+  ) %>%
+  unnest(cols = data)
+
+unstable_1_data <- data %>% filter((interval == 1 | interval == 2 | interval == 3) & experiment == "no_nf")
+unstable_1_smooth <- spline(unstable_1_data$`# (R21 - production I).g_I`, unstable_1_data$`[PM]`, n = 10*length(unstable_1_data$`# (R21 - production I).g_I`))
+unstable_1_smooth <- tibble(`# (R21 - production I).g_I` = unstable_1_smooth$x, `[PM]` = unstable_1_smooth$y, experiment = "no_nf", interval = 1)
+
+data <- bind_rows(data, unstable_1_smooth)
+plot_data <- data %>% mutate(experiment = factor(experiment, levels = exp_order))
+plot_data <- plot_data %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"),
+                          labels = c("E", "Unstable 1", "Unstable 1", "Unstable 1", "E/M", "Unstable 2", "M")))
+
+plot_data %>%
+  ggplot(aes(`# (R21 - production I).g_I`, `[PM]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) +
+  geom_line(size = 1.2) +  
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('Basal IFN', gamma, ' prod. rate (nM hr'^'-1', ')')), y = 'PD-L1 membrane (molecules)') +
+  coord_cartesian(xlim = c(0, 0.5), ylim = c(0, 3.2e5)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  scale_y_continuous(expand = c(0, 0)) -> bif_I_PM
+
+legend_bif_I_PM <- get_legend(bif_I_PM + guides(linetype = "none"))
+```
+
+### 2D bifurcation
+
+```{r}
+twod_copasi %>% 
+  drop_na() %>%
+  nest_by(`(R21 - production I).g_I`) %>%
+  mutate(
+    bps = list(determine_BP(data, "# Values[S].InitialValue", "[mZ]", res = "x"))
+  ) %>% 
+  filter(length(bps) <= 4) %>% # sometimes too many bps are detected
+  summarize(bp_to_tibble(bps)) %>%
+  rename(IFN = `(R21 - production I).g_I`) -> sum2
+
+BP1_sp <- spline(sum2$IFN, sum2$BP1, xmax = 0.2, n = 10*length(sum2$IFN))
+BP2_sp <- spline(sum2$IFN, sum2$BP2, xmax = 0.2, n = 10*length(sum2$IFN))
+BP3_sp <- spline(sum2$IFN, sum2$BP3, xmax = 0.2, n = 10*length(sum2$IFN))
+BP4_sp <- spline(sum2$IFN, sum2$BP4, xmax = 0.2, n = 10*length(sum2$IFN))
+BP_smooth <- tibble(IFN = BP1_sp$x, BP1 = BP1_sp$y, BP2 = BP2_sp$y, BP3 = BP3_sp$y, BP4 = BP4_sp$y)
+
+twod_copasi_nf %>% 
+  drop_na() %>%
+  nest_by(`(R21 - production I).g_I`) %>%
+  mutate(
+    bps = list(determine_BP(data, "# Values[S].InitialValue", "[mZ]", res = "x"))
+  ) %>% 
+  filter(length(bps) <= 4) %>%
+  summarize(bp_to_tibble(bps)) %>%
+  rename(IFN = `(R21 - production I).g_I`) -> sum2
+
+BP1_sp <- spline(sum2$IFN, sum2$BP1, xmax = 0.2, n = 10*length(sum2$IFN))
+BP2_sp <- spline(sum2$IFN, sum2$BP2, xmax = 0.2, n = 10*length(sum2$IFN))
+BP3_sp <- spline(sum2$IFN, sum2$BP3, xmax = 0.2, n = 10*length(sum2$IFN))
+BP4_sp <- spline(sum2$IFN, sum2$BP4, xmax = 0.2, n = 10*length(sum2$IFN))
+BP_smooth_nf <- tibble(IFN = BP1_sp$x, BP1 = BP1_sp$y, BP2 = BP2_sp$y, BP3 = BP3_sp$y, BP4 = BP4_sp$y)
+
+plot_data <- tribble(
+  ~experiment, ~data,
+  "no_nf", BP_smooth,
+  "nf", BP_smooth_nf,
+) %>% 
+  unnest(cols = data) %>%
+  mutate(experiment = factor(experiment, levels = exp_order, labels = exp_labels))
+
+plot_data %>% 
+  ggplot() +
+  geom_ribbon(aes(y = IFN, xmin = xmin, xmax = xmax, fill = '{E}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP4/1e5, xmax = xmax, fill = '{E, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP2/1e5, xmax = xmax, fill = '{E, E/M, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP1/1e5, xmax = xmax, fill = '{E/M, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP3/1e5, xmax = xmax, fill = '{M}')) +
+  geom_vline(xintercept = 1.95, linetype = "dashed") +
+  geom_hline(yintercept = 0.1, linetype = "dashed") +
+  coord_cartesian(ylim = c(0,0.2)) +
+  labs(x = expression(paste('SNAIL1 (10'^'5', ' molecules)')), y = expression(paste('Basal IFN', gamma, ' prod. rate (nM hr'^'-1', ')')), fill = NULL) +
+  scale_fill_OkabeIto(order = c(6,2,7,5,1), limits = c('{E}','{E, M}', '{E, E/M, M}', '{E/M, M}', '{M}')) + 
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0), breaks = seq(0, 0.2, by =0.05)) +
+  facet_grid(~experiment, labeller = label_parsed) -> twod_bif_nf
+```
+
+### Combined
+
+```{r}
+A <- plot_grid(ifn_inh_pdl_image,
+               bif_S_PM + theme_cowplot(text_size) + guides(color = "none") + theme(legend.position = "top", legend.justification = "center"),
+               legend_bif_S_PM,
+               NULL,
+               rel_widths = c(1.0, 0.78, 0.0, 0.22), labels = c("A", "B", "", ""), label_size = label_size, ncol = 4, align = "vh", axis = "tlbr", scale = 0.9)
+
+B <- plot_grid(bif_I_PM + theme_cowplot(text_size) + guides(color = "none") + theme(legend.position = "top", legend.justification = "center"),
+               legend_bif_I_PM,
+               NULL,
+               bif_S_mZ + theme_cowplot(text_size) + guides(color = "none") + theme(legend.position = "top", legend.justification = "center"),
+               legend_bif_S_mZ,
+               NULL,
+               rel_widths = c(0.78, 0.0, 0.22, 0.78, 0.0, 0.22), labels = c("C", "", "", "D", "", ""), label_size = label_size, ncol = 6, align = "vh", axis = "tlbr", scale = 0.9)
+
+C <- plot_grid(twod_bif_nf + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(), legend.position="right", panel.spacing = unit(4, "lines")), 
+               labels = "E", label_size = label_size, ncol = 1, align = "vh", axis = "tlbr", scale = 0.9)
+
+figure1 <- plot_grid(A, 
+                     B, 
+                     C, 
+                     ncol = 1, align = "vh", axis = "tlbr", rel_heights = c(1, 1, 0.8))
+
+ggsave("output/figure1.pdf", width = 12, height = 15.75)
+```
+
+## 2. TGFβ-mediated IFNγ inhibition
+
+### Schematic overview
+
+```{r}
+full_model_ti <- load.image("data/inkscape/full_model_ti.png")
+full_model_ti_image <- ggplot() + theme(line = element_blank())
+full_model_ti_image <- ggdraw(full_model_ti_image) + draw_image(full_model_ti, x = -0.2, y = -0.1, width = 1.3, height = 1.3)
+```
+
+### Data
+
+```{r}
+twod_copasi_ext <- read_copasi("data/copasi_data/bifs/full_model_2d_bif.txt") %>% 
+  rename(IFN = `(R21 - production I).g_I`,
+         TGF = `# (R23 - production T).gT`)
+
+twod_copasi_ext_ti <- bind_rows(
+  read_copasi("data/copasi_data/bifs/full_model_ti_2d_bif_i.txt"),
+  read_copasi("data/copasi_data/bifs/full_model_ti_2d_bif_ii.txt"),
+  read_copasi("data/copasi_data/bifs/full_model_ti_2d_bif_iii.txt")
+) %>% 
+  rename(IFN = `(R21 - production I).g_I`,
+         TGF = `# (R23 - production T).gT`)
+```
+
+### TGFβ bifurcations
+
+```{r}
+data_0_06 <- twod_copasi_ext %>% filter(IFN == 0.06)
+data_0_11 <- twod_copasi_ext %>% filter(IFN == 0.11)
+data_0_16 <- twod_copasi_ext %>% filter(IFN == 0.16)
+
+data_ti_0_06 <- twod_copasi_ext_ti %>% filter(IFN == 0.06)
+bp = determine_BP(data_ti_0_06, "TGF", "[mZ]")
+data_ti_0_06 = data_ti_0_06 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_ti_0_11 <- twod_copasi_ext_ti %>% filter(IFN == 0.11)
+bp = determine_BP(data_ti_0_11, "TGF", "[mZ]")
+data_ti_0_11 = data_ti_0_11 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_ti_0_16 <- twod_copasi_ext_ti %>% filter(IFN == 0.16)
+bp = determine_BP(data_ti_0_16, "TGF", "[mZ]")
+data_ti_0_16 = data_ti_0_16 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+# PD-L1
+
+PM_smooth_0_06 <- spline(data_0_06$`[PM]`, data_0_06$TGF, n = 10*length(data_0_06$`[PM]`))
+PM_smooth_0_06 <- tibble(`[PM]` = PM_smooth_0_06$x, TGF = PM_smooth_0_06$y)
+bp = determine_BP(PM_smooth_0_06, "TGF", "[PM]")
+PM_smooth_0_06 <- PM_smooth_0_06 %>% mutate(interval = findInterval(`[PM]`, bp))
+
+PM_smooth_0_11 <- spline(data_0_11$`[PM]`, data_0_11$TGF, n = 10*length(data_0_11$`[PM]`))
+PM_smooth_0_11 <- tibble(`[PM]` = PM_smooth_0_11$x, TGF = PM_smooth_0_11$y)
+bp = determine_BP(PM_smooth_0_11, "TGF", "[PM]")
+PM_smooth_0_11 <- PM_smooth_0_11 %>% mutate(interval = findInterval(`[PM]`, bp))
+
+PM_smooth_0_16 <- spline(data_0_16$`[PM]`, data_0_16$TGF, n = 10*length(data_0_16$`[PM]`))
+PM_smooth_0_16 <- tibble(`[PM]` = PM_smooth_0_16$x, TGF = PM_smooth_0_16$y)
+bp = determine_BP(PM_smooth_0_16, "TGF", "[PM]")
+PM_smooth_0_16 <- PM_smooth_0_16 %>% mutate(interval = findInterval(`[PM]`, bp))
+
+data_PM <- tribble(
+  ~experiment, ~concentration, ~data,
+  "no_ti", "ifn_0_06", PM_smooth_0_06,
+  "ti", "ifn_0_06", data_ti_0_06,
+  "no_ti", "ifn_0_11", PM_smooth_0_11,
+  "ti", "ifn_0_11", data_ti_0_11,
+  "no_ti", "ifn_0_16", PM_smooth_0_16,
+  "ti", "ifn_0_16", data_ti_0_16,
+  
+) %>% 
+  rowwise() %>%
+  unnest(cols = data)
+
+exp_order <- c("no_ti", "ti")
+exp_labels <- c(expression(paste('No IFN', gamma, ' inhibition')),
+                expression(paste('Inhibition of IFN', gamma, ' by TGF', beta))
+                ) %>% setNames(exp_order)
+
+conc_order <- c("ifn_0_06", "ifn_0_11", "ifn_0_16")
+conc_labels <- c(expression(paste('Low IFN', gamma, ' production')),
+                 expression(paste('Intermediate IFN', gamma, ' production')),
+                 expression(paste('High IFN', gamma, ' production'))
+                ) %>% setNames(conc_order)
+
+xmin = 0
+xmax = 0.25
+
+plot_data_PM <- data_PM %>% mutate(experiment = factor(experiment, levels = exp_order),
+                                   concentration = factor(concentration, levels = conc_order, labels = conc_labels)) %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"), 
+                           labels = c("E", "Unstable 1", "E/M", "Unstable 2", "M", "M", "M")))
+
+plot_data_PM %>%
+  ggplot(aes(TGF, `[PM]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) + 
+  geom_line(size = 1.2) + 
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = 'PD-L1 membrane (molecules)') +
+  coord_cartesian(xlim = c(xmin,xmax), ylim = c(0, 3.2e5)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  facet_grid(~concentration, labeller = label_parsed) -> bif_T_PM
+
+legend_bif_T_PM <- get_legend(bif_T_PM + guides(linetype = "none"))
+
+# ZEB1 mRNA
+
+mZ_smooth_0_11 <- spline(data_0_11$`[mZ]`, data_0_11$TGF, n = 10*length(data_0_11$`[mZ]`))
+mZ_smooth_0_11 <- tibble(`[mZ]` = mZ_smooth_0_11$x, TGF = mZ_smooth_0_11$y)
+bp = determine_BP(mZ_smooth_0_11, "TGF", "[mZ]")
+mZ_smooth_0_11 <- mZ_smooth_0_11 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_mZ <- tribble(
+  ~experiment, ~concentration, ~data,
+  "no_ti", "ifn_0_11", mZ_smooth_0_11,
+  "ti", "ifn_0_11", data_ti_0_11,
+  
+) %>% 
+  rowwise() %>%
+  unnest(cols = data)
+
+plot_data_mZ <- data_mZ %>% mutate(experiment = factor(experiment, levels = exp_order),
+                                   concentration = factor(concentration, levels = conc_order)) %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"), 
+                           labels = c("E", "Unstable 1", "E/M", "Unstable 2", "M", "M", "M")))
+
+plot_data_mZ %>%
+  ggplot(aes(TGF, `[mZ]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) + 
+  geom_line(size = 1.2) + 
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = 'ZEB mRNA (molecules)') +
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) -> bif_T_mZ
+
+legend_bif_T_mZ <- get_legend(bif_T_mZ + guides(linetype = "none"))
+```
+
+### 2D bifurcation
+
+#### Without IFNγ inhibition
+
+```{r}
+twod_copasi_ext %>% 
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) %>% 
+  filter(length(bps) <= 4) %>%
+  summarize(bp_to_tibble(bps)) -> sum2
+
+BP1_sp <- spline(sum2$IFN, sum2$BP1, xmax = 0.4, n = 10*length(sum2$IFN))
+BP2_sp <- spline(sum2$IFN, sum2$BP2, xmax = 0.4, n = 10*length(sum2$IFN))
+BP3_sp <- spline(sum2$IFN, sum2$BP3, xmax = 0.4, n = 10*length(sum2$IFN))
+BP4_sp <- spline(sum2$IFN, sum2$BP4, xmax = 0.4, n = 10*length(sum2$IFN))
+BP_smooth <- tibble(IFN = BP1_sp$x, BP1 = BP1_sp$y, BP2 = BP2_sp$y, BP3 = BP3_sp$y, BP4 = BP4_sp$y)
+
+plot_data <- tribble(
+  ~experiment, ~data,
+  "no_ti", BP_smooth,
+) %>% 
+  unnest(cols = data)
+
+plot_data %>% ggplot() +  
+  geom_ribbon(aes(y = IFN, xmin = xmin, xmax = xmax, fill = '{E}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP4, xmax = xmax, fill = '{E, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP2, xmax = xmax, fill = '{E, E/M, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP1, xmax = xmax, fill = '{E/M, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP3, xmax = xmax, fill = '{M}')) +
+  geom_hline(yintercept = 0.06, linetype = "dashed") +
+  geom_hline(yintercept = 0.11, linetype = "dashed") +
+  geom_hline(yintercept = 0.16, linetype = "dashed") +
+  coord_cartesian(xlim = c(0,0.25), ylim = c(0,0.2)) +
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = expression(paste('Basal IFN', gamma, ' prod. rate (nM hr'^'-1', ')')), fill = NULL) +
+  scale_fill_OkabeIto(order = c(6,2,7,5,1), limits = c('{E}','{E, M}', '{E, E/M, M}', '{E/M, M}', '{M}')) + 
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0), breaks = seq(0, 0.2, by = 0.05)) +
+  ggtitle(expression(paste('No IFN', gamma, ' inhibition'))) -> twod_bif_ext
+
+plot_grid(twod_bif_ext + theme_cowplot(text_size) + theme(axis.title.x=element_text(hjust=1.34), plot.margin = unit(c(0, 0, 0, 0), "cm"), plot.title = element_text(hjust = 0.5, size = 0.875*text_size), strip.placement = 'outside', strip.background = element_blank(), legend.position="None", panel.spacing = unit(4, "lines")), 
+          labels = "", label_size = label_size, ncol = 1, align = "vh", axis = "tlbr") -> twod_bif_ext
+```
+
+#### With IFNγ inhibition
+
+Calculate BP1 (separates {E, E/M, M} from {E/M, M})
+
+```{r}
+T_cutoffs <- c(0.097, 0.111)
+I_cutoffs <- c(0.0826, 0.0824, 0.0815)
+mZ_cutoff <- 200
+
+# Top section
+
+twod_copasi_ext_ti %>% 
+  filter(IFN != I_cutoffs[1] & IFN >= I_cutoffs[2]) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) -> nested
+
+BP1_top <- tibble('gI' = unlist(nested$IFN), 'BP' = sapply(nested$bps,"[[",1))
+
+# Section left of island
+
+twod_copasi_ext_ti %>% 
+  filter(IFN < I_cutoffs[2] & IFN >= I_cutoffs[3] & TGF < T_cutoffs[1])  %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) -> nested
+
+BP1_left_of_island <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps)[c(TRUE, FALSE, FALSE, FALSE)])
+
+# Island section
+
+twod_copasi_ext_ti %>% 
+  filter(IFN < I_cutoffs[2] & IFN >= I_cutoffs[3] & TGF > T_cutoffs[1] & `[mZ]` < mZ_cutoff) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP_island(data, "TGF", "[mZ]"))
+  ) -> nested
+
+BP1_island_left <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps)[c(TRUE, FALSE)])
+BP1_island_right <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps)[c(FALSE, TRUE)])
+
+# Bottom section
+
+twod_copasi_ext_ti %>% 
+  filter(IFN < I_cutoffs[3] & TGF > T_cutoffs[2] & `[mZ]` < mZ_cutoff) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) -> nested
+
+BP1_bottom <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps))
+
+# Combined
+
+BP1 <- rbind(BP1_top, BP1_left_of_island, BP1_island_left, BP1_island_right, BP1_bottom)
+```
+
+Calculate BP3 (separates {E/M, M} from {M})
+
+```{r}
+T_cutoffs <- c(0.162, 0.2)
+I_cutoffs <- c(0.1432, 0.1356, 0.141, 0.137)
+mZ_cutoff <- 600
+
+# Top section
+
+twod_copasi_ext_ti %>% 
+  filter(IFN >= I_cutoffs[1]) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) -> nested
+
+BP3_top <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps)[c(FALSE, FALSE, TRUE, FALSE)])
+
+# Section left of island
+
+twod_copasi_ext_ti %>% 
+  filter(IFN < I_cutoffs[3] & IFN >= I_cutoffs[2] & TGF < T_cutoffs[1]) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) -> nested
+
+BP3_left_of_island <- tibble('gI' = unlist(nested$IFN), 'BP' = sapply(sapply(nested$bps, rev),"[[",2))
+
+# Island section
+
+twod_copasi_ext_ti %>% 
+  filter(IFN < I_cutoffs[1] & IFN >= I_cutoffs[4] & TGF > T_cutoffs[1] & `[mZ]` < mZ_cutoff) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP_island(data, "TGF", "[mZ]"))
+  ) -> nested
+
+BP3_island_left <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps)[c(TRUE, FALSE)])
+BP3_island_right <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps)[c(FALSE, TRUE)])
+
+# Bottom section
+
+twod_copasi_ext_ti %>% 
+  filter(IFN < I_cutoffs[2] & TGF > T_cutoffs[2] & `[mZ]` < mZ_cutoff) %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) -> nested
+
+BP3_bottom <- tibble('gI' = unlist(nested$IFN), 'BP' = unlist(nested$bps))
+
+# Combined
+
+BP3 <- rbind(BP3_top, BP3_left_of_island, BP3_island_left, BP3_island_right, BP3_bottom)
+```
+
+Plot figure
+
+```{r}
+twod_copasi_ext_ti %>%
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) %>% 
+  filter(length(bps) <= 4) %>%
+  summarize(bp_to_tibble(bps)) -> sum2
+
+BP2_sp <- spline(sum2$IFN, sum2$BP2, xmax = 0.4, n = 10*length(sum2$IFN))
+BP4_sp <- spline(sum2$IFN, sum2$BP4, xmax = 0.4, n = 10*length(sum2$IFN))
+plot_data_ti <- tibble(IFN = BP2_sp$x, BP2 = BP2_sp$y, BP4 = BP4_sp$y)
+
+ggplot() +  
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = xmin, xmax = xmax, fill = '{E}')) +
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = plot_data_ti$BP4, xmax = xmax, fill = '{E, M}')) +
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = plot_data_ti$BP2, xmax = xmax, fill = '{M}')) +
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = plot_data_ti$BP2, xmax = min(BP3$BP + 0.0001), fill = '{E/M, M}')) +
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = plot_data_ti$BP2, xmax = min(BP1$BP + 0.0001), fill = '{E, E/M, M}')) +
+  geom_area(aes(x = BP3$BP, y = BP3$gI, fill = '{E/M, M}')) +
+  geom_area(aes(x = BP1$BP, y = BP1$gI, fill = '{E, E/M, M}')) +  
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = max(BP3$BP - 0.001), xmax = xmax, fill = '{M}')) +
+  geom_ribbon(aes(y = plot_data_ti$IFN, xmin = max(BP1$BP - 0.001), xmax = min(BP3$BP), fill = '{E/M, M}')) +
+  geom_hline(yintercept = 0.06, linetype = "dashed") +
+  geom_hline(yintercept = 0.11, linetype = "dashed") +
+  geom_hline(yintercept = 0.16, linetype = "dashed") +
+  coord_cartesian(xlim = c(0,0.25), ylim = c(0,0.2)) +
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = "", fill = NULL) +
+  scale_fill_OkabeIto(order = c(6,2,7,5,1), limits = c('{E}','{E, M}', '{E, E/M, M}', '{E/M, M}', '{M}')) + 
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0), breaks = seq(0, 0.2, by =0.05)) +
+  ggtitle(expression(paste('Inhibition of IFN', gamma, ' by TGF', beta))) -> twod_bif_ext_ti
+
+plot_grid(twod_bif_ext_ti + theme_cowplot(text_size) + theme(plot.margin = unit(c(0, 0, 0, 0), "cm"), axis.line.y = element_blank(), axis.text.y = element_blank(), axis.ticks.y = element_blank(), axis.title.x = element_text(colour = "white"), plot.title = element_text(hjust = 0.5, size = (14/16)*text_size), strip.placement = 'outside', strip.background = element_blank(), legend.position="right", panel.spacing = unit(4, "lines")), 
+          labels = "", label_size = label_size, ncol = 1, align = "vh", axis = "tlbr") -> twod_bif_ext_ti
+
+plot_grid(twod_bif_ext, 
+          twod_bif_ext_ti, 
+          labels = "", label_size = label_size, ncol = 2, align = "vh", axis = "tlbr", scale = 0.9, rel_widths = c(1, 1.2)) -> twod_bif_ext_full
+```
+
+### Combined
+
+```{r}
+A <- plot_grid(full_model_ti_image,
+               bif_T_mZ + guides(color = "none") + theme_cowplot(text_size) + theme(legend.position="top", legend.justification = "center"),
+               legend_bif_T_mZ,
+               NULL,
+               rel_widths = c(1.0, 0.78, 0.0, 0.22), labels = c("A", "C", "", ""), label_size = label_size, ncol = 4, align = "vh", axis = "tlbr", scale = 0.9)
+
+B <- plot_grid(bif_T_PM + guides(color = "none") + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(), legend.position="top", legend.justification = "center", panel.spacing = unit(4, "lines")),
+               legend_bif_T_PM,
+               NULL,
+               rel_widths = c(0.89, 0.0, 0.11), labels = c("B", "", ""), label_size = label_size, ncol = 3, align = "vh", axis = "tlbr", scale = 0.9)
+
+C <- plot_grid(twod_bif_ext_full, 
+               scale = 0.93, labels = "D", label_size = label_size)
+
+figure2 <- plot_grid(A, 
+                     B, 
+                     C, 
+                     ncol = 1, align = "vh", axis = "tlbr", rel_heights = c(1, 0.9, 0.8))
+
+ggsave("output/figure2.pdf", width = 12, height = 15.1875)
+```
+
+## 3. Long-range IFNγ spreading
+
+### Simulation image
+
+```{r}
+long <- load.image("data/inkscape/long_image.png")
+long_image <- ggplot() + theme(line = element_blank())
+long_image <- ggdraw(long_image) + draw_image(long, x = -0.02, y = -0.02, width = 1.05, height = 1.05)
+```
+
+### Data
+
+```{r}
+morpheus_base_path <- path("data/morpheus_data/")
+
+data_long <- tribble(
+  ~experiment, ~condition, ~replicate, ~file,
+  "hom", "no_im", "1", "long_tgf_uni_246/logger.csv",
+  "hom", "no_im", "2", "long_tgf_uni_247/logger.csv",
+  "hom", "no_im", "3", "long_tgf_uni_248/logger.csv",
+  "hom", "no_im", "4", "long_tgf_uni_249/logger.csv",
+  "hom", "no_im", "5", "long_tgf_uni_250/logger.csv",
+  "hom", "pd_im", "1", "long_tgf_uni_251/logger.csv",
+  "hom", "pd_im", "2", "long_tgf_uni_252/logger.csv",
+  "hom", "pd_im", "3", "long_tgf_uni_253/logger.csv",
+  "hom", "pd_im", "4", "long_tgf_uni_254/logger.csv",
+  "hom", "pd_im", "5", "long_tgf_uni_255/logger.csv",
+  "hom", "tgf_im", "1", "long_tgf_uni_256/logger.csv",
+  "hom", "tgf_im", "2", "long_tgf_uni_257/logger.csv",
+  "hom", "tgf_im", "3", "long_tgf_uni_258/logger.csv",
+  "hom", "tgf_im", "4", "long_tgf_uni_259/logger.csv",
+  "hom", "tgf_im", "5", "long_tgf_uni_260/logger.csv",
+  "het", "no_im", "1", "long_tgf_uni_288/logger.csv",
+  "het", "no_im", "2", "long_tgf_uni_289/logger.csv",
+  "het", "no_im", "3", "long_tgf_uni_290/logger.csv",
+  "het", "no_im", "4", "long_tgf_uni_291/logger.csv",
+  "het", "no_im", "5", "long_tgf_uni_292/logger.csv",
+  "het", "pd_im", "1", "long_tgf_uni_286/logger.csv",
+  "het", "pd_im", "2", "long_tgf_uni_293/logger.csv",
+  "het", "pd_im", "3", "long_tgf_uni_294/logger.csv",
+  "het", "pd_im", "4", "long_tgf_uni_295/logger.csv",
+  "het", "pd_im", "5", "long_tgf_uni_296/logger.csv",
+  "het", "tgf_im", "1", "long_tgf_uni_297/logger.csv",
+  "het", "tgf_im", "2", "long_tgf_uni_298/logger.csv",
+  "het", "tgf_im", "3", "long_tgf_uni_299/logger.csv",
+  "het", "tgf_im", "4", "long_tgf_uni_300/logger.csv",
+  "het", "tgf_im", "5", "long_tgf_uni_301/logger.csv",
+  ) %>%
+  rowwise() %>%
+  mutate(data = list(read_morpheus(path(morpheus_base_path, file)))) %>%
+    select(-file) %>% 
+    unnest(data) %>% 
+    mutate(cell.type = replace(cell.type, cell.type == "1", "E"),
+           cell.type = replace(cell.type, cell.type == "2", "E/M"),
+           cell.type = replace(cell.type, cell.type == "3", "M"),
+           cell.type = replace(cell.type, cell.type == "4", "T"),
+           ) %>%
+  filter(time > 2100)
+
+exp_order <- c("hom", "het")
+exp_labels <- c('Homogeneous \n (SD = 0)',
+                'Heterogeneous \n (SD = 0.01)'
+                ) %>% setNames(exp_order)
+
+con_order <- c("no_im", "pd_im", "tgf_im")
+con_labels <- c(expression(paste('No IFN', gamma, ' inhibition')),
+                expression(paste('Inh. of IFN', gamma, ' by PD-L1')),
+                expression(paste('Inh. of IFN', gamma, ' by TGF', beta))
+                ) %>% setNames(con_order)
+
+data_long <- data_long %>% mutate(experiment = factor(experiment, levels = exp_order, labels = exp_labels),
+                             condition = factor(condition, levels = con_order))
+```
+
+### IFNγ production
+
+```{r}
+plot_data_hom <- data_long %>% 
+  filter(cell.type == 'T') %>%
+  group_by(experiment, condition) %>%
+  summarize(
+    median_gI = median(gI)
+  )
+
+data_long %>%
+  filter(cell.type == 'T' & experiment == 'Heterogeneous \n (SD = 0.01)' & condition == 'pd_im') %>%
+  ggplot() +
+  geom_violin(aes(condition, gI, fill = 'Heterogeneous \n (SD = 0.01)')) +
+  scale_x_discrete(labels = con_labels) +
+  scale_y_continuous(expand = expansion(mult = c(0,0.05))) +
+  expand_limits(y=0) +
+  scale_fill_manual(values = c("#00BFC4")) +
+  scale_color_manual(values = c( "#F8766D")) +
+  guides(color = guide_legend(reverse = TRUE)) +
+  labs(x = '', y = expression(paste('T cell IFN', gamma, ' prod. rate (molecules min'^'-1', ')'))) + 
+  geom_boxplot(aes(condition, gI, group = interaction(condition,experiment)), width = 0.2, position = position_dodge(width=0.9)) +
+  geom_point(aes(1, plot_data_hom[2,3][[1]], color = 'Homogeneous \n (SD = 0)'), size = 3) -> long_I_prod
+```
+
+### IFNγ concentration
+
+```{r}
+data_long %>%
+  filter(cell.type == 'E') %>%
+  ggplot() +
+  geom_violin(aes(condition, IFN_nM, fill = experiment)) +
+  scale_y_continuous(expand = expansion(mult = c(0,0.05))) +
+  scale_x_discrete(labels = con_labels) +
+  expand_limits(y = 0) +
+  labs(x = '', y = expression(paste('[IFN', gamma, '] sensed by epith. tumor cells (nM)'))) + 
+  geom_boxplot(aes(condition, IFN_nM, group = interaction(condition,experiment)), width = 0.2, position = position_dodge(width=0.9)) -> long_I_conc
+```
+
+### Combined
+
+```{r}
+plot_grid(long_image,
+          labels = "AUTO", label_size = label_size, ncol = 1, align = "vh", axis = "tlbr", scale = 0.9) -> A
+
+plot_grid(long_I_prod + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(), legend.position="top", legend.justification = "right", legend.title = element_blank()),
+          long_I_conc + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(), legend.position="top", legend.justification = "right", legend.title = element_blank()),
+          labels = c("B", "C"), label_size = label_size, ncol = 2, align = "vh", axis = "tlbr", scale = 0.9, rel_widths = c(1, 2)) -> B
+
+plot_grid(A, 
+          B, 
+          ncol = 1, align = "vh", axis = "tlbr", rel_heights = c(0.8, 1.5)) -> figure3
+
+ggsave("output/figure3.pdf", width = 12, height = 9.2)
+```
+
+## 4. Short-range IFNγ spreading
+
+### Simulation image
+
+```{r}
+short <- load.image("data/inkscape/short_image.png")
+short_image <- ggplot() + theme(line = element_blank())
+short_image <- ggdraw(short_image) + draw_image(short, x = -0.15, y = -0.1, width = 1.2, height = 1.2)
+```
+
+### Data
+
+```{r}
+data_short <- tribble(
+  ~experiment, ~condition, ~replicate, ~file,
+  "no_gr", "no_im", "1", "short_tgf_uni_170/logger.csv",
+  "no_gr", "no_im", "2", "short_tgf_uni_171/logger.csv",
+  "no_gr", "no_im", "3", "short_tgf_uni_172/logger.csv",
+  "no_gr", "no_im", "4", "short_tgf_uni_173/logger.csv",
+  "no_gr", "no_im", "5", "short_tgf_uni_174/logger.csv",
+  "no_gr", "no_im", "6", "short_tgf_uni_175/logger.csv",
+  "no_gr", "no_im", "7", "short_tgf_uni_176/logger.csv",
+  "no_gr", "no_im", "8", "short_tgf_uni_177/logger.csv",
+  "no_gr", "no_im", "9", "short_tgf_uni_178/logger.csv",
+  "no_gr", "no_im", "10", "short_tgf_uni_179/logger.csv",
+  "no_gr", "pd_im", "1", "short_tgf_uni_180/logger.csv",
+  "no_gr", "pd_im", "2", "short_tgf_uni_181/logger.csv",
+  "no_gr", "pd_im", "3", "short_tgf_uni_182/logger.csv",
+  "no_gr", "pd_im", "4", "short_tgf_uni_183/logger.csv",
+  "no_gr", "pd_im", "5", "short_tgf_uni_184/logger.csv",
+  "no_gr", "pd_im", "6", "short_tgf_uni_185/logger.csv",
+  "no_gr", "pd_im", "7", "short_tgf_uni_186/logger.csv",
+  "no_gr", "pd_im", "8", "short_tgf_uni_187/logger.csv",
+  "no_gr", "pd_im", "9", "short_tgf_uni_188/logger.csv",
+  "no_gr", "pd_im", "10", "short_tgf_uni_189/logger.csv",
+  "no_gr", "tgf_im", "1", "short_tgf_uni_190/logger.csv",
+  "no_gr", "tgf_im", "2", "short_tgf_uni_191/logger.csv",
+  "no_gr", "tgf_im", "3", "short_tgf_uni_192/logger.csv",
+  "no_gr", "tgf_im", "4", "short_tgf_uni_193/logger.csv",
+  "no_gr", "tgf_im", "5", "short_tgf_uni_194/logger.csv",
+  "no_gr", "tgf_im", "6", "short_tgf_uni_195/logger.csv",
+  "no_gr", "tgf_im", "7", "short_tgf_uni_196/logger.csv",
+  "no_gr", "tgf_im", "8", "short_tgf_uni_197/logger.csv",
+  "no_gr", "tgf_im", "9", "short_tgf_uni_198/logger.csv",
+  "no_gr", "tgf_im", "10", "short_tgf_uni_199/logger.csv",
+  "gr", "no_im", "1", "short_tgf_grad_200/logger.csv",
+  "gr", "no_im", "2", "short_tgf_grad_201/logger.csv",
+  "gr", "no_im", "3", "short_tgf_grad_202/logger.csv",
+  "gr", "no_im", "4", "short_tgf_grad_203/logger.csv",
+  "gr", "no_im", "5", "short_tgf_grad_204/logger.csv",
+  "gr", "no_im", "6", "short_tgf_grad_205/logger.csv",
+  "gr", "no_im", "7", "short_tgf_grad_206/logger.csv",
+  "gr", "no_im", "8", "short_tgf_grad_207/logger.csv",
+  "gr", "no_im", "9", "short_tgf_grad_208/logger.csv",
+  "gr", "no_im", "10", "short_tgf_grad_209/logger.csv",
+  "gr", "pd_im", "1", "short_tgf_grad_210/logger.csv",
+  "gr", "pd_im", "2", "short_tgf_grad_211/logger.csv",
+  "gr", "pd_im", "3", "short_tgf_grad_212/logger.csv",
+  "gr", "pd_im", "4", "short_tgf_grad_213/logger.csv",
+  "gr", "pd_im", "5", "short_tgf_grad_214/logger.csv",
+  "gr", "pd_im", "6", "short_tgf_grad_215/logger.csv",
+  "gr", "pd_im", "7", "short_tgf_grad_216/logger.csv",
+  "gr", "pd_im", "8", "short_tgf_grad_217/logger.csv",
+  "gr", "pd_im", "9", "short_tgf_grad_218/logger.csv",
+  "gr", "pd_im", "10", "short_tgf_grad_219/logger.csv",
+  "gr", "tgf_im", "1", "short_tgf_grad_220/logger.csv",
+  "gr", "tgf_im", "2", "short_tgf_grad_221/logger.csv",
+  "gr", "tgf_im", "3", "short_tgf_grad_222/logger.csv",
+  "gr", "tgf_im", "4", "short_tgf_grad_223/logger.csv",
+  "gr", "tgf_im", "5", "short_tgf_grad_224/logger.csv",
+  "gr", "tgf_im", "6", "short_tgf_grad_225/logger.csv",
+  "gr", "tgf_im", "7", "short_tgf_grad_226/logger.csv",
+  "gr", "tgf_im", "8", "short_tgf_grad_227/logger.csv",
+  "gr", "tgf_im", "9", "short_tgf_grad_228/logger.csv",
+  "gr", "tgf_im", "10", "short_tgf_grad_229/logger.csv",
+  ) %>%
+  rowwise() %>%
+  mutate(data = list(read_morpheus(path(morpheus_base_path, file)))) %>%
+    select(-file) %>% 
+    unnest(data) %>% 
+    mutate(cell.type = replace(cell.type, cell.type == "1", "E"),
+           cell.type = replace(cell.type, cell.type == "2", "E/M"),
+           cell.type = replace(cell.type, cell.type == "3", "M"),
+           cell.type = replace(cell.type, cell.type == "4", "T"),
+           )
+
+exp_order <- c("no_gr", "gr")
+exp_labels <- c(expression(paste('TGF', beta, ' uniform (0.1 nM)')),
+                expression(paste('TGF', beta, ' gradient'))
+                ) %>% setNames(exp_order)
+
+con_order <- c("no_im", "pd_im", "tgf_im")
+con_labels <- c(expression(paste('No IFN', gamma, ' inhibition')),
+                expression(paste('Inh. of IFN', gamma, ' by PD-L1')),
+                expression(paste('Inh. of IFN', gamma, ' by TGF', beta))
+                ) %>% setNames(con_order)
+
+data_short <- data_short %>% mutate(experiment = factor(experiment, levels = exp_order, labels = exp_labels),
+                             condition = factor(condition, levels = con_order))
+```
+
+### Time course PD-L1/ZEB1
+
+```{r}
+plot_data <- data_short %>% 
+  filter(cell.type != 'T') %>%
+  group_by(experiment, condition, time, replicate) %>% 
+  summarize(mean_PM = mean(PM),
+  sd_PM = sd(PM),
+  se_PM = std.error(PM),
+  mean_Z = mean(Z),
+  sd_Z = sd(Z),
+  se_Z = std.error(Z)) %>% 
+  mutate(mean_mean_PM = mean(mean_PM),
+  se_mean_PM = std.error(mean_PM),
+  PM_top = mean_mean_PM + se_mean_PM,
+  PM_lower = mean_mean_PM - se_mean_PM,
+  mean_mean_Z = mean(mean_Z),
+  se_mean_Z = std.error(mean_Z),
+  Z_top = mean_mean_Z + se_mean_Z,
+  Z_lower = mean_mean_Z - se_mean_Z) %>%
+  filter(time>=10)
+
+plot_data %>% ggplot() +
+  geom_ribbon(aes(x = time, ymin = PM_lower, max = PM_top, fill = condition, group = condition)) +
+  geom_line(aes(time, mean_mean_PM, group = condition, color = condition), size = 1) +
+  scale_color_OkabeIto(order = c(2,1,3), labels = con_labels, name = NULL) +
+  scale_fill_OkabeIto(order = c(2,1,3), darken = -0.8, labels = con_labels, name = NULL) +
+  labs(x = 'Time (min)', y = 'PD-L1 membrane (molecules)') +
+  coord_cartesian(xlim = c(0,130)) +
+  scale_x_continuous(expand = c(0,0), breaks = c(10, 40, 70, 100, 130)) +
+  scale_y_continuous(expand = c(0,0)) + 
+  theme(legend.position = "top") +
+  facet_wrap(~experiment, labeller = label_parsed) -> short_PM
+
+plot_data %>% ggplot() +
+  geom_ribbon(aes(x = time, ymin = Z_lower, max = Z_top, fill = condition, group = condition)) +
+  geom_line(aes(time, mean_mean_Z, group = condition, color = condition), size = 1) +
+  scale_color_OkabeIto(order = c(2,1,3), labels = con_labels, name = NULL) +
+  scale_fill_OkabeIto(order = c(2,1,3), darken = -0.8, labels = con_labels, name = NULL) +
+  labs(x = 'Time (min)', y = 'ZEB1 (molecules)') +
+  coord_cartesian(xlim = c(0,130)) +
+  scale_x_continuous(expand = c(0,0), breaks = c(10, 40, 70, 100, 130)) +
+  scale_y_continuous(expand = c(0,0)) + 
+  theme(legend.position = "top") +
+  facet_wrap(~experiment, labeller = label_parsed) -> short_Z
+
+plot_data %>% ggplot() +
+  geom_ribbon(aes(x = mean_mean_Z, ymin = PM_lower, max = PM_top, fill = condition, group = condition)) +
+  geom_line(aes(mean_mean_Z, mean_mean_PM, group = condition, color = condition), size = 1) +
+  scale_color_OkabeIto(order = c(2,1,3), labels = con_labels, name = NULL) +
+  scale_fill_OkabeIto(order = c(2,1,3), darken = -0.8, labels = con_labels, name = NULL) +
+  labs(x = 'ZEB1 (molecules)', y = 'PD-L1 membrane (molecules)') +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme(legend.position = "top") +
+  facet_wrap(~experiment, labeller = label_parsed) -> short_PM_Z
+```
+
+### Time course EMT phenotypes
+
+```{r}
+data_short <- data_short %>% mutate(condition = factor(condition, levels = con_order, labels = con_labels))
+
+plot_data_emt <- data_short %>%
+  filter(cell.type != 'T') %>%
+  group_by(experiment, condition, replicate, time, cell.type) %>% 
+  tally() %>%
+  group_by(experiment, condition, time, cell.type) %>%
+  mutate(mean_n = mean(n),
+  se_n = std.error(n),
+  n_top = mean_n + se_n,
+  n_lower = mean_n - se_n) %>%
+  filter(time>=10)
+
+plot_data_emt %>%
+  ggplot() +
+  geom_ribbon(aes(x = time, ymin = n_lower, max = n_top, fill = cell.type), alpha = 0.2) +
+  geom_line(aes(time, mean_n, color = cell.type), size = 1) +
+  facet_grid(rows = vars(condition), cols = vars(experiment), labeller = label_parsed) +
+  scale_x_continuous(expand = c(0,0), breaks = c(10, 40, 70, 100, 130)) +
+  scale_y_continuous(expand = expansion(mult = c(0,0.05))) +
+  expand_limits(y = 0) +
+  labs(color = "phenotype", fill = "phenotype") +
+  labs(x = 'Time (min)', y = 'number of cells') -> short_emt
+```
+
+### Combined
+
+```{r}
+plot_grid(short_image,
+          short_PM_Z + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(),legend.position="top", legend.justification = "right"), 
+          labels = c("A", "D"), label_size = label_size, ncol = 1, align = "vh", axis = "tlbr", scale = 0.9, rel_heights = c(3, 1)) -> A
+
+plot_grid(short_PM + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(),legend.position="top", legend.justification = "right"), 
+          short_Z + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(),legend.position="top", legend.justification = "right"),
+          short_emt + theme_cowplot(text_size) + panel_border() + theme(strip.placement = 'outside', strip.background = element_blank(), panel.spacing.x = unit(1, "lines"), legend.position = "top", legend.justification = "right", legend.title = element_blank()),
+          labels =  c("B", "C", "E"), label_size = label_size, ncol = 1, align = "vh", axis = "tlbr", scale = 0.9, rel_heights = c(1, 1, 2)) -> B
+
+plot_grid(A, 
+          B, 
+          ncol = 2, align = "vh", axis = "tlbr") -> figure4
+
+ggsave("output/figure4.pdf", width = 16, height = 20)
+```
+
+# SI
+
+## S1. Sensitivity
+
+### PD-L1-mediated IFNγ inhibition
+
+```{r}
+sens_PM_base_path <- path("data/copasi_data/sensitivity/PM/")
+```
+
+```{r}
+vars <- c("l_5", "n_5", "PM0")
+labels <- c(
+  expression('l'[5]),
+  expression('n'[5]),
+  expression('PM'[0])
+) %>% setNames(vars)
+```
+
+```{r}
+meta <- tibble(file = path_file(dir_ls(sens_PM_base_path, type = "file"))) %>%
+  filter(file != "unchanged.txt") %>%
+  # extract parameter and value from file name
+  mutate(str_match(file, "(.*) ([\\d\\.]+[\\d])(\\.txt)?")[,c(2,3)] %>% 
+           as_tibble() %>% 
+           setNames(c("par", "val")))
+meta$val <- as.numeric(meta$val)
+
+meta_res <- meta %>% filter(par != 'n_5') %>%
+  # sort before adding change
+  group_by(par) %>%
+  arrange(val, .by_group = T) %>%
+  # add change (every parameter has -20%, -10%, +10%, +20%)
+  mutate(change = rep_along(val, c(-0.2, -0.1, 0.1, 0.2))) %>%
+  # add unchanged.txt
+  ungroup() %>%
+  add_row(tibble_row(file = "unchanged.txt", par = "base", change = 0)) 
+
+meta_n <- meta %>% filter(par == 'n_5') %>%
+  # sort before adding change
+  group_by(par) %>%
+  arrange(val, .by_group = T) %>%
+  # add change (this parameter only has -1 or +1, plotted together with -20% and +20% of other parameters)
+  mutate(change = rep_along(val, c(-0.2, 0.2))) %>%
+  ungroup()
+
+all_nested <- rbind(meta_res, meta_n) %>%
+  # read data
+  rowwise() %>%
+  mutate(data = list(read_copasi(path(sens_PM_base_path, file)))) %>%
+  select(-file) %>%
+  # compute bifurcation
+  mutate(bp = list(determine_BP(data, "# Values[S].InitialValue", "[mZ]"))) %>%
+  # include bp info in data
+  mutate(data = list(data %>% mutate(interval = findInterval(`[mZ]`, bp)))) %>%
+  select(-bp)
+```
+
+```{r}
+par_meta <- tribble(
+  ~par, ~col, ~row,
+  "l_5", "PM,I", "lambda",
+  "n_5", "PM,I", "nB",
+  "PM0", "PM,I", "B0"
+) %>% 
+  mutate(row = factor(row, levels = c('lambda', 'nB', 'B0')))
+
+row_names <- c("lambda", "nB", "B0")
+row_labels <- c(expression(lambda),
+                expression(n[B]),
+                expression(B[0])
+) %>% setNames(row_names)
+
+col_names <- c("PM,I")
+col_labels <- c(
+  expression(paste("PD-L1 inh. IFN", gamma))
+) %>% setNames(col_names)
+
+par_meta <- par_meta %>% mutate(
+  row = factor(row, labels = row_labels),
+  col = factor(col, labels = col_labels)
+)
+```
+
+```{r}
+xmin <- 1.7
+xmax <- 2.3
+
+sens <- all_nested %>% filter(par != "base")
+base_add <- sens %>% expand(par) %>% add_column(all_nested %>% filter(par == "base") %>% select(-par))
+all <- bind_rows(sens, base_add) %>%
+  unnest(cols = data) %>%
+  mutate(stable = (interval %% 2) == 0) %>%
+  mutate(change = factor(change,
+                         levels = c(-0.2, -0.1, 0, 0.1, 0.2),
+                         labels = c("-20% or -1", "-10%", "Model value", "+10%", "+20% or +1"),
+                         ordered = T))
+
+all %>%
+  left_join(par_meta, by = "par") %>%
+  mutate(par = factor(par, labels = labels)) %>%
+  ggplot(aes(`# Values[S].InitialValue`/1e5, `[PM]`, linetype = stable, color = change, group = interaction(interval, change))) + 
+  geom_line(size = 1) +
+  facet_grid(rows = vars(row), cols = vars(col), labeller = label_parsed) + 
+  scale_linetype_discrete(guide = "none", limits = c(TRUE,FALSE)) +
+  scale_color_discrete_diverging(palette = "Blue-Red") +
+  labs(color = NULL,
+       x = expression(paste('SNAIL1 (10'^'5', ' molecules)')), 
+       y = 'PD-L1 membrane (molecules)'
+       ) +
+  theme_cowplot(font_size = text_size) +
+  theme(
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 1.2*text_size, face = "bold"),
+        strip.text.y = element_text(size = 1.2*text_size, face = "bold"),
+        legend.position = "bottom",
+        legend.justification = "center",
+        axis.text.x=element_text(angle = 45, hjust = 1)
+        ) + 
+  panel_border() + 
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_y_log10() -> sens_pdl_nf
+
+all %>%
+  left_join(par_meta, by = "par") %>%
+  mutate(par = factor(par, labels = labels)) %>%
+  ggplot(aes(`# Values[S].InitialValue`/1e5, `[Z]`, linetype = stable, color = change, group = interaction(interval, change))) + 
+  geom_line(size = 1) +
+  facet_grid(rows = vars(row), cols = vars(col), labeller = label_parsed) + 
+  scale_linetype_discrete(guide = "none", limits = c(TRUE,FALSE)) +
+  scale_color_discrete_diverging(palette = "Blue-Red") +
+  labs(color = NULL,
+       x = expression(paste('SNAIL1 (10'^'5', ' molecules)')), 
+       y = 'ZEB1 (molecules)'
+       ) +
+  theme_cowplot(font_size = text_size) +
+  theme(
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 1.2*text_size, face = "bold"),
+        strip.text.y = element_text(size = 1.2*text_size, face = "bold"),
+        legend.position = "bottom",
+        legend.justification = "center",
+        axis.text.x=element_text(angle = 45, hjust = 1)
+        ) + 
+  panel_border() + 
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_y_log10() -> sens_zeb_nf
+```
+
+### TGFβ-mediated IFNγ inhibition
+
+```{r}
+sens_T_base_path <- path("data/copasi_data/sensitivity/T/")
+```
+
+```{r}
+vars <- c("l_6", "n_6", "T0")
+labels <- c(
+  expression('l'[6]),
+  expression('n'[6]),
+  expression('T'[0])
+) %>% setNames(vars)
+```
+
+```{r}
+meta <- tibble(file = path_file(dir_ls(sens_T_base_path, type = "file"))) %>%
+  filter(file != "unchanged.txt") %>%
+  # extract parameter and value from file name
+  mutate(str_match(file, "(.*) ([\\d\\.]+[\\d])(\\.txt)?")[,c(2,3)] %>% 
+           as_tibble() %>% 
+           setNames(c("par", "val")))
+meta$val <- as.numeric(meta$val)
+
+meta_res <- meta %>% filter(par != 'n_6') %>%
+  # sort before adding change
+  group_by(par) %>%
+  arrange(val, .by_group = T) %>%
+  # add change (every parameter has -20%, -10%, +10%, +20%)
+  mutate(change = rep_along(val, c(-0.2, -0.1, 0.1, 0.2))) %>%
+  # add unchanged.txt
+  ungroup() %>%
+  add_row(tibble_row(file = "unchanged.txt", par = "base", change = 0)) 
+
+meta_n <- meta %>% filter(par == 'n_6') %>%
+  # sort before adding change
+  group_by(par) %>%
+  arrange(val, .by_group = T) %>%
+  # add change (this parameter only has -1 or +1, plotted together with -20% and +20% of other parameters)
+  mutate(change = rep_along(val, c(-0.2, 0.2))) %>%
+  ungroup()
+
+all_nested <- rbind(meta_res, meta_n) %>%
+  # read data
+  rowwise() %>%
+  mutate(data = list(read_copasi(path(sens_T_base_path, file)))) %>%
+  select(-file) %>%
+  # compute bifurcation
+  mutate(bp = list(determine_BP(data, "# (R23 - production T).gT", "[mZ]"))) %>%
+  # include bp info in data
+  mutate(data = list(data %>% mutate(interval = findInterval(`[mZ]`, bp)))) %>%
+  select(-bp)
+```
+
+```{r}
+par_meta <- tribble(
+  ~par, ~col, ~row,
+  "l_6", "T,I", "lambda",
+  "n_6", "T,I", "nB",
+  "T0", "T,I", "B0"
+) %>% 
+  mutate(row = factor(row, levels = c('lambda', 'nB', 'B0')))
+
+row_names <- c("lambda", "nB", "B0")
+row_labels <- c(expression(lambda),
+                expression(n[B]),
+                expression(B[0])
+) %>% setNames(row_names)
+
+col_names <- c("T,I")
+col_labels <- c(
+  expression(paste("TGF", beta, " inh. IFN", gamma))
+) %>% setNames(col_names)
+
+par_meta <- par_meta %>% mutate(
+  row = factor(row, labels = row_labels),
+  col = factor(col, labels = col_labels)
+)
+```
+
+```{r}
+xmin <- 0
+xmax <- 0.25
+
+# add model value to all pars
+sens <- all_nested %>% filter(par != "base")
+base_add <- sens %>% expand(par) %>% add_column(all_nested %>% filter(par == "base") %>% select(-par))
+all <- bind_rows(sens, base_add) %>%
+  unnest(cols = data) %>%
+  mutate(stable = (interval %% 2) == 0) %>%
+  mutate(change = factor(change,
+                         levels = c(-0.2, -0.1, 0, 0.1, 0.2),
+                         labels = c("-20% or -1", "-10%", "Model value", "+10%", "+20% or +1"),
+                         ordered = T))
+
+all %>%
+  left_join(par_meta, by = "par") %>%
+  mutate(par = factor(par, labels = labels)) %>%
+  ggplot(aes(`# (R23 - production T).gT`, `[PM]`, linetype = stable, color = change, group = interaction(interval, change))) + 
+  geom_line(size = 1) +
+  facet_grid(rows = vars(row), cols = vars(col), labeller = label_parsed) + 
+  scale_linetype_discrete(guide = "none", limits = c(TRUE,FALSE)) +
+  scale_color_discrete_diverging(palette = "Blue-Red") +
+  labs(color = NULL,
+       x = expression(paste('TGF', beta, ' (nM)')), 
+       y = 'PD-L1 membrane (molecules)'
+       ) +
+  theme_cowplot(font_size = text_size) +
+  theme(
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 1.2*text_size, face = "bold"),
+        strip.text.y = element_text(size = 1.2*text_size, face = "bold"),
+        legend.position = "bottom",
+        legend.justification = "center",
+        axis.text.x=element_text(angle = 45, hjust = 1)
+        ) + 
+  panel_border() + 
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_log10() -> sens_pdl_ti
+
+all %>%
+  left_join(par_meta, by = "par") %>%
+  mutate(par = factor(par, labels = labels)) %>%
+  ggplot(aes(`# (R23 - production T).gT`, `[Z]`, linetype = stable, color = change, group = interaction(interval, change))) + 
+  geom_line(size = 1) +
+  facet_grid(rows = vars(row), cols = vars(col), labeller = label_parsed) + 
+  scale_linetype_discrete(guide = "none", limits = c(TRUE,FALSE)) +
+  scale_color_discrete_diverging(palette = "Blue-Red") +
+  labs(color = NULL,
+       x = expression(paste('TGF', beta, ' (nM)')), 
+       y = 'ZEB1 (molecules)'
+       ) +
+  theme_cowplot(font_size = text_size) +
+  theme(
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 1.2*text_size, face = "bold"),
+        strip.text.y = element_text(size = 1.2*text_size, face = "bold"),
+        legend.position = "right",
+        legend.justification = "center",
+        axis.text.x=element_text(angle = 45, hjust = 1)
+        ) + 
+  panel_border() + 
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_log10() -> sens_zeb_ti
+
+legend_sens = get_legend(sens_zeb_ti + guides(linetype = "none"))
+```
+
+### Combined
+
+```{r}
+A <- plot_grid(
+  sens_pdl_nf + theme(legend.position="none",
+                      plot.margin = margin(7,7,20,7,"points"),
+                      axis.title.x=element_blank(),
+                      axis.text.x=element_blank(),
+                      strip.background.y = element_blank(), 
+                      strip.text.y = element_blank()),
+  sens_pdl_ti + theme(legend.position="none",
+                      plot.margin = margin(7,7,20,7,"points"),
+                      axis.title.x=element_blank(), 
+                      axis.text.x=element_blank(),
+                      axis.title.y=element_blank()),
+  sens_zeb_nf + theme(legend.position="none",
+                      strip.background.x = element_blank(), 
+                      strip.text.x = element_blank(),
+                      strip.background.y = element_blank(), 
+                      strip.text.y = element_blank()),
+  sens_zeb_ti + theme(legend.position="none",
+                      strip.background.x = element_blank(), 
+                      strip.text.x = element_blank(),
+                      axis.title.y=element_blank(),
+                      axis.title.x = element_text(margin = margin(t = 17, b = -3))),
+  ncol = 2
+)
+
+B <- plot_grid(legend_sens,
+               NULL,
+               ncol = 1, rel_heights = c(1.0, 0.025))
+
+plot_grid(A, 
+          B,
+          rel_widths = c(1.0, 0.2)) -> si_sens
+
+ggsave("output/si_sens.pdf", width = 10, height = 14)
+```
+
+## S2. Islands (gI sensitivity)
+
+### Data
+
+```{r}
+data <- tribble(
+  ~experiment, ~set, ~data,
+  "data_ti_0_081", 'low', twod_copasi_ext_ti %>% filter(IFN == 0.081),
+  "data_ti_0_082", 'low', twod_copasi_ext_ti %>% filter(IFN == 0.082),
+  "data_ti_0_083", 'low', twod_copasi_ext_ti %>% filter(IFN == 0.083),
+  "data_ti_0_135", 'high',  twod_copasi_ext_ti %>% filter(IFN == 0.135),
+  "data_ti_0_14", 'high', twod_copasi_ext_ti %>% filter(IFN == 0.14),
+  "data_ti_0_145", 'high', twod_copasi_ext_ti %>% filter(IFN == 0.145),
+  
+) %>% 
+  rowwise() %>%
+  mutate(
+    bp = list(determine_BP(data, "TGF", "[mZ]")),
+    data = list(data %>% mutate(interval = findInterval(`[mZ]`, bp)))
+  ) %>%
+  unnest(cols = data) %>%
+  mutate(stable = (interval %% 2) == 0)
+
+exp_order <- c("data_ti_0_081", "data_ti_0_082", "data_ti_0_083", "data_ti_0_135", "data_ti_0_14", "data_ti_0_145")
+exp_labels <- c(expression(paste(g['I'], '= 0.081 nM hr'^'-1')),
+                expression(paste(g['I'], '= 0.082 nM hr'^'-1')),
+                expression(paste(g['I'], '= 0.083 nM hr'^'-1')),
+                expression(paste(g['I'], '= 0.135 nM hr'^'-1')),
+                expression(paste(g['I'], '= 0.14 nM hr'^'-1')),
+                expression(paste(g['I'], '= 0.145 nM hr'^'-1'))
+                ) %>% setNames(exp_order)
+
+set_order <- c("low", "high")
+set_labels <- c(expression(paste(g['I'], '= 0.081-0.083 nM hr'^'-1')),
+                expression(paste(g['I'], '= 0.135-0.145 nM hr'^'-1'))
+                ) %>% setNames(set_order)
+
+plot_data <- data %>% mutate(experiment = factor(experiment, levels = exp_order), set = factor(set, levels = set_order))
+```
+
+### Data for each gI
+
+```{r}
+T_cutoffs <- c(0.155, 0.1)
+mZ_cutoffs <- c(495, 493, 600, 200)
+
+plot_data_0_135 <- plot_data %>% filter(IFN == 0.135)
+plot_data_0_14 <- plot_data %>% filter(IFN == 0.14)
+plot_data_0_145 <- plot_data %>% filter(IFN == 0.145)
+plot_data_0_081 <- plot_data %>% filter(IFN == 0.081)
+plot_data_0_082 <- plot_data %>% filter(IFN == 0.082)
+plot_data_0_083 <- plot_data %>% filter(IFN == 0.083)
+
+A <- plot_data_0_135 %>%
+  filter(`[mZ]` < determine_BP(plot_data_0_135, "TGF", "[mZ]")[1]) %>%
+  mutate(stable = TRUE, interval = 0)
+B <- plot_data_0_135 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_135, "TGF", "[mZ]")[1] & `[mZ]` < determine_BP(plot_data_0_135, "TGF", "[mZ]")[2]) %>%
+  mutate(stable = FALSE, interval = 1)
+C <- plot_data_0_135 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_135, "TGF", "[mZ]")[2] & `[mZ]` < mZ_cutoffs[1]) %>%
+  mutate(stable = TRUE, interval = 2)
+D <- plot_data_0_135 %>%
+  filter(`[mZ]` > 495 & `[mZ]` < determine_BP(plot_data_0_135, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = FALSE, interval = 3)
+E <- plot_data_0_135 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_135, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = TRUE, interval = 4)
+
+plot_data_0_135 <- rbind(A,B,C,D,E)
+
+A <- plot_data_0_14 %>%
+  filter(`[mZ]` < determine_BP(plot_data_0_14, "TGF", "[mZ]")[1]) %>%
+  mutate(stable = TRUE, interval = 0)
+B <- plot_data_0_14 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_14, "TGF", "[mZ]")[1] & `[mZ]` < determine_BP(plot_data_0_14, "TGF", "[mZ]")[2]) %>%
+  mutate(stable = FALSE, interval = 1)
+C <- plot_data_0_14 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_14, "TGF", "[mZ]")[2] & `[mZ]` < mZ_cutoffs[2]) %>%
+  mutate(stable = TRUE, interval = 2)
+D <- plot_data_0_14 %>%
+  filter(`[mZ]` > 493 & `[mZ]` < determine_BP(plot_data_0_14, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = FALSE, interval = 3)
+E <- plot_data_0_14 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_14, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = TRUE, interval = 4)
+
+plot_data_0_14 <- rbind(A,B,C,D,E)
+
+plot_data_0_14_island <- plot_data_0_14 %>% 
+  filter(TGF > T_cutoffs[1] & `[mZ]` < mZ_cutoffs[3]) %>%
+  mutate(type = "island")
+plot_data_0_14_main <- plot_data_0_14 %>% 
+  filter(TGF < T_cutoffs[1] | TGF >= T_cutoffs[1] & `[mZ]` > mZ_cutoffs[3]) %>%
+  mutate(type = "main")
+
+plot_data_0_14 <- rbind(plot_data_0_14_main, plot_data_0_14_island)
+
+A <- plot_data_0_081 %>%
+  filter(`[mZ]` < determine_BP(plot_data_0_081, "TGF", "[mZ]")[1]) %>%
+  mutate(stable = TRUE, interval = 0)
+B <- plot_data_0_081 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_081, "TGF", "[mZ]")[1] & `[mZ]` < determine_BP(plot_data_0_081, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = FALSE, interval = 1)
+C <- plot_data_0_081 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_081, "TGF", "[mZ]")[4] & `[mZ]` < determine_BP(plot_data_0_081, "TGF", "[mZ]")[5]) %>%
+  mutate(stable = TRUE, interval = 2)
+D <- plot_data_0_081 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_081, "TGF", "[mZ]")[5] & `[mZ]` < determine_BP(plot_data_0_081, "TGF", "[mZ]")[6]) %>%
+  mutate(stable = FALSE, interval = 3)
+E <- plot_data_0_081 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_081, "TGF", "[mZ]")[6]) %>%
+  mutate(stable = TRUE, interval = 4)
+
+plot_data_0_081 <- rbind(A,B,C,D,E)
+
+A <- plot_data_0_082 %>%
+  filter(`[mZ]` < determine_BP(plot_data_0_082, "TGF", "[mZ]")[1]) %>%
+  mutate(stable = TRUE, interval = 0)
+B <- plot_data_0_082 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_082, "TGF", "[mZ]")[1] & `[mZ]` < determine_BP(plot_data_0_082, "TGF", "[mZ]")[2]) %>%
+  mutate(stable = FALSE, interval = 1)
+C <- plot_data_0_082 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_082, "TGF", "[mZ]")[2] & `[mZ]` < 94) %>%
+  mutate(stable = TRUE, interval = 2)
+D <- plot_data_0_082 %>%
+  filter(`[mZ]` > mZ_cutoffs[2] & `[mZ]` < determine_BP(plot_data_0_082, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = FALSE, interval = 3)
+E <- plot_data_0_082 %>%
+  filter(`[mZ]` > determine_BP(plot_data_0_082, "TGF", "[mZ]")[4]) %>%
+  mutate(stable = TRUE, interval = 4)
+
+plot_data_0_082 <- rbind(A,B,C,D,E)
+
+plot_data_0_082_island <- plot_data_0_082 %>% 
+  filter(TGF > T_cutoffs[2] & `[mZ]` < mZ_cutoffs[4]) %>%
+  mutate(type = "island")
+plot_data_0_082_main <- plot_data_0_082 %>%
+  filter(TGF < T_cutoffs[2] | TGF >= T_cutoffs[2] & `[mZ]` > mZ_cutoffs[4]) %>%
+  mutate(type = "main")
+
+plot_data_0_082 <- rbind(plot_data_0_082_main, plot_data_0_082_island)
+```
+
+### Combined
+
+```{r}
+si_island <- ggplot() + 
+  geom_line(data = plot_data_0_135, aes(TGF, `[mZ]`, group = interaction(experiment, interval), linetype = stable, color = experiment), size = 1.2, alpha = 0.5) + 
+  geom_line(data = plot_data_0_14, aes(TGF, `[mZ]`, group = interaction(experiment, interval, type), linetype = stable, color = experiment), size = 1.2, alpha = 0.75) + 
+  geom_line(data = plot_data_0_145, aes(TGF, `[mZ]`, group = interaction(experiment, interval), linetype = stable, color = experiment), size = 1.2, alpha = 1) + 
+  geom_line(data = plot_data_0_081, aes(TGF, `[mZ]`, group = interaction(experiment, interval), linetype = stable, color = experiment), size = 1.2, alpha = 0.5) + 
+  geom_line(data = plot_data_0_082, aes(TGF, `[mZ]`, group = interaction(experiment, interval, type), linetype = stable, color = experiment), size = 1.2, alpha = 0.75) + 
+  geom_line(data = plot_data_0_083, aes(TGF, `[mZ]`, group = interaction(experiment, interval), linetype = stable, color = experiment), size = 1.2, alpha = 1) + 
+  scale_linetype_discrete(guide = "none", limits = c(TRUE,FALSE)) +
+  scale_color_discrete_diverging(palette = "Cyan-Magenta", labels = exp_labels, name = NULL) +
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = 'ZEB1 mRNA (molecules)') +
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  theme_cowplot(text_size) + 
+  theme(legend.position="top", legend.justification = "right")
+
+plot_grid(si_island, 
+          scale = 0.95) -> si_island
+
+ggsave("output/si_island.pdf", width = 8, height = 7.5)
+```
+
+## S3. PD-L1- and TGFβ-mediated IFNγ inhibition
+
+### Schematic overview
+
+```{r}
+full_model_nf_ti <- load.image("data/inkscape/full_model_nf_ti.png")
+full_model_nf_ti_image <- ggplot() + theme(line = element_blank())
+full_model_nf_ti_image <- ggdraw(full_model_nf_ti_image) + draw_image(full_model_nf_ti, x = -0.2, y = -0.1, width = 1.3, height = 1.3)
+```
+
+### Data
+
+```{r}
+twod_copasi_ext_nf_ti <- bind_rows(
+  read_copasi("data/copasi_data/bifs/full_model_nf_ti_2d_bif_i.txt"),
+  read_copasi("data/copasi_data/bifs/full_model_nf_ti_2d_bif_ii.txt"),
+  read_copasi("data/copasi_data/bifs/full_model_nf_ti_2d_bif_iii.txt")
+) %>% 
+  rename(IFN = `(R21 - production I).g_I`,
+         TGF = `# (R23 - production T).gT`)
+```
+
+### TGFβ bifurcations
+
+```{r}
+data_0_12 <- twod_copasi_ext %>% filter(IFN == 0.12)
+data_0_24 <- twod_copasi_ext %>% filter(IFN == 0.24)
+data_0_36 <- twod_copasi_ext %>% filter(IFN == 0.36)
+
+data_ti_0_12 <- twod_copasi_ext_nf_ti %>% filter(IFN == 0.12)
+bp = determine_BP(data_ti_0_12, "TGF", "[mZ]")
+data_ti_0_12 = data_ti_0_12 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_ti_0_24 <- twod_copasi_ext_nf_ti %>% filter(IFN == 0.24)
+bp = determine_BP(data_ti_0_24, "TGF", "[mZ]")
+data_ti_0_24 = data_ti_0_24 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_ti_0_36 <- twod_copasi_ext_nf_ti %>% filter(IFN == 0.36)
+bp = determine_BP(data_ti_0_36, "TGF", "[mZ]")
+data_ti_0_36 = data_ti_0_36 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+# PD-L1
+
+PM_smooth_0_12 <- spline(data_0_12$`[PM]`, data_0_12$TGF, n = 10*length(data_0_12$`[PM]`))
+PM_smooth_0_12 <- tibble(`[PM]` = PM_smooth_0_12$x, TGF = PM_smooth_0_12$y)
+bp = determine_BP(PM_smooth_0_12, "TGF", "[PM]")
+PM_smooth_0_12 <- PM_smooth_0_12 %>% mutate(interval = findInterval(`[PM]`, bp))
+
+PM_smooth_0_24 <- spline(data_0_24$`[PM]`, data_0_24$TGF, n = 10*length(data_0_24$`[PM]`))
+PM_smooth_0_24 <- tibble(`[PM]` = PM_smooth_0_24$x, TGF = PM_smooth_0_24$y)
+bp = determine_BP(PM_smooth_0_24, "TGF", "[PM]")
+PM_smooth_0_24 <- PM_smooth_0_24 %>% mutate(interval = findInterval(`[PM]`, bp))
+
+PM_smooth_0_36 <- spline(data_0_36$`[PM]`, data_0_36$TGF, n = 10*length(data_0_36$`[PM]`))
+PM_smooth_0_36 <- tibble(`[PM]` = PM_smooth_0_36$x, TGF = PM_smooth_0_36$y)
+bp = determine_BP(PM_smooth_0_36, "TGF", "[PM]")
+PM_smooth_0_36 <- PM_smooth_0_36 %>% mutate(interval = findInterval(`[PM]`, bp))
+
+data_PM <- tribble(
+  ~experiment, ~concentration, ~data,
+  "no_ti", "ifn_0_12", PM_smooth_0_12,
+  "ti", "ifn_0_12", data_ti_0_12,
+  "no_ti", "ifn_0_24", PM_smooth_0_24,
+  "ti", "ifn_0_24", data_ti_0_24,
+  "no_ti", "ifn_0_36", PM_smooth_0_36,
+  "ti", "ifn_0_36", data_ti_0_36,
+  
+) %>% 
+  rowwise() %>%
+  unnest(cols = data)
+
+exp_order <- c("no_ti", "ti")
+exp_labels <- c(expression(paste('No IFN', gamma, ' inhibition')),
+                expression(paste('Inhibition of IFN', gamma, ' by TGF', beta))
+                ) %>% setNames(exp_order)
+
+conc_order <- c("ifn_0_12", "ifn_0_24", "ifn_0_36")
+conc_labels <- c(expression(paste('Low IFN', gamma, ' production')),
+                 expression(paste('Intermediate IFN', gamma, ' production')),
+                 expression(paste('High IFN', gamma, ' production'))
+                ) %>% setNames(conc_order)
+
+plot_data_PM <- data_PM %>% mutate(experiment = factor(experiment, levels = exp_order),
+                             concentration = factor(concentration, levels = conc_order, labels = conc_labels)) %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"),
+                          labels = c("E", "Unstable 1", "E/M", "Unstable 2", "M", "M", "M")))
+
+plot_data_PM %>%
+  ggplot(aes(TGF, `[PM]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) + 
+  geom_line(size = 1.2) + 
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = 'PD-L1 membrane (molecules)') +
+  coord_cartesian(xlim = c(xmin,xmax), ylim = c(0, 3.2e5)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) +
+  facet_grid(~concentration, labeller = label_parsed) -> bif_T_PM
+
+legend_bif_T_PM <- get_legend(bif_T_PM + guides(linetype = "none"))
+
+# ZEB1 mRNA
+
+mZ_smooth_0_24 <- spline(data_0_24$`[mZ]`, data_0_24$TGF, n = 10*length(data_0_24$`[mZ]`))
+mZ_smooth_0_24 <- tibble(`[mZ]` = mZ_smooth_0_24$x, TGF = mZ_smooth_0_24$y)
+bp = determine_BP(mZ_smooth_0_24, "TGF", "[mZ]")
+mZ_smooth_0_24 <- mZ_smooth_0_24 %>% mutate(interval = findInterval(`[mZ]`, bp))
+
+data_mZ <- tribble(
+  ~experiment, ~concentration, ~data,
+  "no_ti", "ifn_0_24", mZ_smooth_0_24,
+  "ti", "ifn_0_24", data_ti_0_24,
+  
+) %>% 
+  rowwise() %>%
+  unnest(cols = data)
+
+plot_data_mZ <- data_mZ %>% mutate(experiment = factor(experiment, levels = exp_order),
+                             concentration = factor(concentration, levels = conc_order)) %>%
+  mutate(interval = factor(interval, levels = c("0", "1", "2", "3", "4", "5", "6"),
+                          labels = c("E", "Unstable 1", "E/M", "Unstable 2", "M", "M", "M")))
+
+plot_data_mZ %>%
+  ggplot(aes(TGF, `[mZ]`, group = interaction(experiment, interval), linetype = experiment, color = interval)) + 
+  geom_line(size = 1.2) + 
+  scale_linetype_discrete(labels = exp_labels, name = NULL) +
+  scale_color_manual(values = gradient_colors, name = NULL) + 
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = 'ZEB mRNA (molecules)') +
+  coord_cartesian(xlim = c(xmin,xmax)) +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) -> bif_T_mZ
+
+legend_bif_T_mZ <- get_legend(bif_T_mZ + guides(linetype = "none"))
+```
+
+### 2D bifurcation
+
+```{r}
+twod_copasi_ext %>% 
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) %>% 
+  filter(length(bps) <= 4) %>%
+  summarize(bp_to_tibble(bps)) -> sum2
+
+BP1_sp <- spline(sum2$IFN, sum2$BP1, xmax = 0.4, n = 10*length(sum2$IFN))
+BP2_sp <- spline(sum2$IFN, sum2$BP2, xmax = 0.4, n = 10*length(sum2$IFN))
+BP3_sp <- spline(sum2$IFN, sum2$BP3, xmax = 0.4, n = 10*length(sum2$IFN))
+BP4_sp <- spline(sum2$IFN, sum2$BP4, xmax = 0.4, n = 10*length(sum2$IFN))
+BP_smooth <- tibble(IFN = BP1_sp$x, BP1 = BP1_sp$y, BP2 = BP2_sp$y, BP3 = BP3_sp$y, BP4 = BP4_sp$y)
+
+twod_copasi_ext_nf_ti %>% 
+  drop_na() %>%
+  nest_by(IFN) %>%
+  mutate(
+    bps = list(determine_BP(data, "TGF", "[mZ]", res = "x"))
+  ) %>% 
+  filter(length(bps) <= 4) %>%
+  summarize(bp_to_tibble(bps)) -> sum2
+
+BP1_sp <- spline(sum2$IFN, sum2$BP1, xmax = 0.4, n = 10*length(sum2$IFN))
+BP2_sp <- spline(sum2$IFN, sum2$BP2, xmax = 0.4, n = 10*length(sum2$IFN))
+BP3_sp <- spline(sum2$IFN, sum2$BP3, xmax = 0.4, n = 10*length(sum2$IFN))
+BP4_sp <- spline(sum2$IFN, sum2$BP4, xmax = 0.4, n = 10*length(sum2$IFN))
+BP_smooth_nf_ti <- tibble(IFN = BP1_sp$x, BP1 = BP1_sp$y, BP2 = BP2_sp$y, BP3 = BP3_sp$y, BP4 = BP4_sp$y)
+
+data <- tribble(
+  ~experiment, ~data,
+  "no_ti", BP_smooth,
+  "ti", BP_smooth_nf_ti,
+) %>% 
+  unnest(cols = data)
+
+exp_order <- c("no_ti", "ti")
+exp_labels <- c(expression(paste('No IFN', gamma, ' inhibition')),
+                expression(paste('Inhibition of IFN', gamma, ' by PD-L1 and TGF', beta))
+                ) %>% setNames(exp_order)
+
+plot_data <- data %>% mutate(experiment = factor(experiment, levels = exp_order, labels = exp_labels))
+
+plot_data %>% 
+  ggplot() +
+  geom_ribbon(aes(y = IFN, xmin = xmin, xmax = xmax, fill = '{E}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP4, xmax = xmax, fill = '{E, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP2, xmax = xmax, fill = '{E, E/M, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP1, xmax = xmax, fill = '{E/M, M}')) +
+  geom_ribbon(aes(y = IFN, xmin = BP3, xmax = xmax, fill = '{M}')) +
+  geom_hline(yintercept = 0.12, linetype = "dashed") +
+  geom_hline(yintercept = 0.24, linetype = "dashed") +
+  geom_hline(yintercept = 0.36, linetype = "dashed") +
+  coord_cartesian(xlim = c(0,0.25), ylim = c(0,0.4)) +
+  labs(x = expression(paste('TGF', beta, ' (nM)')), y = expression(paste('Basal IFN', gamma, ' prod. rate (nM hr'^'-1', ')')), fill = NULL) +
+  scale_fill_OkabeIto(order = c(6,2,7,5,1), limits = c('{E}','{E, M}', '{E, E/M, M}', '{E/M, M}', '{M}')) + 
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0), breaks = seq(0, 0.4, by =0.1)) +
+  facet_grid(~experiment, labeller = label_parsed) -> twod_bif_ext_nf_ti
+```
+
+### Combined
+
+```{r}
+A <- plot_grid(full_model_nf_ti_image, 
+               bif_T_mZ + guides(color = "none") + theme_cowplot(text_size) + theme(legend.position="top", legend.justification = "center"),
+               legend_bif_T_mZ,
+               NULL,
+               rel_widths = c(1.0, 0.78, 0.0, 0.22), labels = c("A", "C", "", ""), label_size = label_size, ncol = 4, align = "vh", axis = "tlbr", scale = 0.9)
+
+B <- plot_grid(bif_T_PM + guides(color = "none") + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(), legend.position="top", legend.justification = "center", panel.spacing = unit(4, "lines")),
+               legend_bif_T_PM,
+               NULL,
+               rel_widths = c(0.89, 0.0, 0.11), labels = c("B", "", ""), label_size = label_size, ncol = 3, align = "vh", axis = "tlbr", scale = 0.9)
+
+C <- plot_grid(twod_bif_ext_nf_ti + theme_cowplot(text_size) + theme(strip.placement = 'outside', strip.background = element_blank(), legend.position="right", panel.spacing = unit(4, "lines")),
+               labels = "D", label_size = label_size, ncol = 1, align = "vh", axis = "tlbr", scale = 0.9)
+
+plot_grid(A, 
+          B, 
+          C, 
+          ncol = 1, align = "vh", axis = "tlbr", rel_heights = c(1, 0.9, 0.8)) -> si_full_model
+
+ggsave("output/si_full_model.pdf", width = 12, height = 15.1875)
+```
+
+## S4. PD-L1/ZEB1 trajectories
+
+```{r}
+set.seed(565)
+
+plot_data <- data_short %>% 
+  filter(cell.type != 'T') %>%
+  group_by(experiment, condition, replicate, cell.id) %>%
+  mutate(id = cur_group_id())
+
+sample <- plot_data %>% 
+  filter(time==130) %>%
+  group_by(experiment, condition, cell.type) %>%
+  sample_n(size=10) %>%
+  ungroup() %>%
+  select(id)
+
+plot_data <- subset(plot_data, id %in% sample$id)
+
+plot_data %>% 
+  ggplot() +
+  geom_line(aes(Z, PM, group = id, color = cell.type), size = 0.5) +
+  facet_grid(rows = vars(condition), cols = vars(experiment), labeller = label_parsed, scales = 'free') +
+  scale_x_continuous(expand = c(0,0)) +
+  scale_y_continuous(expand = c(0,0)) + 
+  expand_limits(y = 0) +
+  labs(color = "phenotype") +
+  labs(x = 'ZEB1 (molecules)', y = 'PD-L1 membrane (molecules)') +
+  theme_cowplot(text_size) + panel_border() + theme(strip.placement = 'outside', strip.background = element_blank(), panel.spacing.x = unit(1, "lines"), legend.position = "top", legend.justification = "right", legend.title = element_blank()) -> si_trajec
+
+ggsave("output/si_trajec.pdf", width = 8, height = 10)
+```

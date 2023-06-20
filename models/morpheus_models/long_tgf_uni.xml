@@ -1,0 +1,749 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<MorpheusModel version="4">
+    <Description>
+        <Details>Homogeneous tumor: set SD = 0
+Heterogeneous tumor: set SD = 0.01
+
+Without IFNγ inhibition: set l_5 = 1 and l_6 = 1
+With PD-L1-mediated IFNγ inhibition: set l_5 = 0.1
+With TGFβ-mediated IFNγ inhibition: set l_6 = 0.1
+
+</Details>
+        <Title>long_tgf_uni</Title>
+    </Description>
+    <Space>
+        <Lattice class="square">
+            <Neighborhood>
+                <Order>2</Order>
+            </Neighborhood>
+            <Size symbol="size" value="350, 350, 0"/>
+            <BoundaryConditions>
+                <Condition type="noflux" boundary="x"/>
+                <Condition type="noflux" boundary="y"/>
+                <Condition type="noflux" boundary="-x"/>
+                <Condition type="noflux" boundary="-y"/>
+            </BoundaryConditions>
+        </Lattice>
+        <SpaceSymbol symbol="space"/>
+    </Space>
+    <Time>
+        <StartTime value="0"/>
+        <StopTime value="2410"/>
+        <TimeSymbol symbol="time"/>
+    </Time>
+    <Analysis>
+        <Logger time-step="10">
+            <Input>
+                <Symbol symbol-ref="cell.type"/>
+                <Symbol symbol-ref="PM"/>
+                <Symbol symbol-ref="Z"/>
+                <Symbol symbol-ref="gI"/>
+                <Symbol symbol-ref="IFN_nM"/>
+                <Symbol symbol-ref="TGF_nM"/>
+            </Input>
+            <Output>
+                <TextOutput file-format="csv"/>
+            </Output>
+            <Restriction exclude-medium="true"/>
+        </Logger>
+        <Gnuplotter time-step="100" decorate="true">
+            <Terminal name="png"/>
+            <Plot title="Cell type + IFNγ field">
+                <Cells min="0" opacity="1" max="4" value="cell.type">
+                    <ColorMap>
+                        <Color value="1" color="white"/>
+                        <Color value="2" color="salmon"/>
+                        <Color value="3" color="light-green"/>
+                        <Color value="4" color="skyblue"/>
+                        <Color value="5" color="black"/>
+                    </ColorMap>
+                </Cells>
+                <Field min="0.0" coarsening="2" symbol-ref="IFN">
+                    <ColorMap>
+                        <Color value="1.0" color="red"/>
+                        <Color value="0.5" color="yellow"/>
+                        <Color value="0.0" color="white"/>
+                    </ColorMap>
+                </Field>
+            </Plot>
+            <Plot title="TGFβ (nM cell-1)">
+                <Cells max="0.1" value="TGF_nM"/>
+            </Plot>
+            <Plot title="IFNγ prod. rate (molecules min-1)">
+                <Cells max="1200" value="gI"/>
+            </Plot>
+            <Plot title="IFNγ (nM cell-1)">
+                <Cells max="3.5" value="IFN_nM"/>
+            </Plot>
+            <Plot title="PD-L1 membrane (molecules)">
+                <Cells max="115000" value="PM"/>
+            </Plot>
+            <Plot title="ZEB1 (molecules)">
+                <Cells max="105000" value="Z"/>
+            </Plot>
+            <!--    <Disabled>
+        <Plot title="ZEB1 mRNA (molecules)">
+            <Cells per-frame-range="true" value="mZ"/>
+        </Plot>
+    </Disabled>
+-->
+        </Gnuplotter>
+        <ModelGraph include-tags="#untagged" format="svg" reduced="false"/>
+    </Analysis>
+    <CellTypes>
+        <CellType class="medium" name="medium">
+            <Constant symbol="kIFN" value="0.021/113*0.01*0.2"/>
+            <Constant symbol="IFN_nM" value="0.0"/>
+            <Constant symbol="TGF_nM" value="0.0"/>
+            <Constant symbol="PM" value="0.0"/>
+            <Constant symbol="Z" value="0.0"/>
+            <Property symbol="gI" value="0.0"/>
+            <Property symbol="gIFN" value="0.0"/>
+        </CellType>
+        <CellType class="biological" name="epithelial">
+            <Property symbol="Z" value="0.0"/>
+            <Property symbol="mu2" value="0.0"/>
+            <Property symbol="mZ" value="0.0"/>
+            <Property symbol="mF" value="0.0"/>
+            <Property symbol="F" value="0.0"/>
+            <Property symbol="mP" value="0.0"/>
+            <Property symbol="PE" value="0.0"/>
+            <Property symbol="PG" value="0.0"/>
+            <Property symbol="PM" value="0.0"/>
+            <Property symbol="mS" value="0.0"/>
+            <Property symbol="S" value="0.0"/>
+            <Property symbol="IFN_nM" value="0.0"/>
+            <Property symbol="TGF_nM" value="TGF_constant*TGF_conv"/>
+            <SurfaceConstraint strength="0.25" target="37.7" mode="surface"/>
+            <VolumeConstraint strength="1" target="113"/>
+            <Property symbol="IFN_local" value="0.0"/>
+            <Mapper name="report field">
+                <Input value="IFN"/>
+                <Output symbol-ref="IFN_local" mapping="sum"/>
+            </Mapper>
+            <Property symbol="gI" value="0.0"/>
+            <Property symbol="kIFN" value="0.021/113*0.01"/>
+            <ChangeCellType newCellType="hybrid">
+                <Condition>mZ>=235</Condition>
+            </ChangeCellType>
+            <System time-scaling="30" solver="Dormand-Prince [adaptive, O(5)]">
+                <DiffEqn symbol-ref="Z">
+                    <Expression>g_Z * mZ * Y(mu2_0,f_1,f_2,f_3,f_4,f_5,f_6,f_7) - k_Z * Z</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mu2">
+                    <Expression>g_mu2 * Hs(Z, Z0_2,n_2,l_2) * Hs(S,S0_4,n_4,l_4) - mZ * Y(mu2_0,j_mu2_1,j_mu2_2,j_mu2_3,j_mu2_4,j_mu2_5,j_mu2_6,j_mu2_7) - mP * Y2(mu2_0,lmumP1,lmumP2,lmumP3) - k_mu2 * mu2</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mZ">
+                    <Expression>g_mZ * Hs(Z,Z0_1,n_1,l_1) * Hs(S,S0_3,n_3,l_3) - mZ * Y(mu2_0,j_mZ_1,j_mZ_2,j_mZ_3,j_mZ_4,j_mZ_5,j_mZ_6,j_mZ_7) - k_mZ * mZ</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mF">
+                    <Expression>gmF*Hs(x7,x70,nx7,lamx7)-kmF*mF</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="F">
+                    <Expression>gF * mF - kF*F</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mP">
+                    <Expression>gmP * Hs(F,F0,nF,lamF) - mP * Y2(mu2_0,lmP1,lmP2,lmP3) - kmP * mP</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PE">
+                    <Expression>gP * mP*Y2(mu2_0,ltP1,ltP2,ltP3) - kEG*PE</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PG">
+                    <Expression>kEG*PE-kGM*PG</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PM">
+                    <Expression>kGM*PG-kPM*PM</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mS">
+                    <Expression>g0mS + gmS*(TGF_nM/JmS0)^n_nt/(1+(TGF_nM/JmS0)^n_nt)*1/(1+(S/JmS1)^n_ns) - kmS*mS</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="S">
+                    <Expression>gS*mS - kS*S</Expression>
+                </DiffEqn>
+                <Function symbol="Y2">
+                    <Expression>j1/(1+mu2/mu0)^2+j2*(mu2/mu0)/(1+mu2/mu0)^2*2 +j3*(mu2/mu0)^2/(1+mu2/mu0)^2</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                </Function>
+                <Function symbol="Y">
+                    <Expression>j1/(1+mu2/mu0)^6+j2*(mu2/mu0)/(1+mu2/mu0)^6*6 +j3*(mu2/mu0)^2/(1+mu2/mu0)^6*15+j4*(mu2/mu0)^3/(1+mu2/mu0)^6*20+j5*(mu2/mu0)^4/(1+mu2/mu0)^6*15+j6*(mu2/mu0)^5/(1+mu2/mu0)^6*6+j7*(mu2/mu0)^6/(1+mu2/mu0)^6</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                    <Parameter symbol="j4"/>
+                    <Parameter symbol="j5"/>
+                    <Parameter symbol="j6"/>
+                    <Parameter symbol="j7"/>
+                </Function>
+                <Function symbol="Hs">
+                    <Expression>(1-l)/(1+(B/B0)^nB)+l</Expression>
+                    <Parameter symbol="B"/>
+                    <Parameter symbol="B0"/>
+                    <Parameter symbol="nB"/>
+                    <Parameter symbol="l"/>
+                </Function>
+                <Function symbol="x7">
+                    <Expression>6020*((d)*exp(-exp(b*(IFN_nM-e))))</Expression>
+                </Function>
+            </System>
+            <Equation symbol-ref="IFN_nM">
+                <Expression>IFN_local*0.0002294176894*IFN_conv</Expression>
+            </Equation>
+            <Property symbol="g_mu2" value="max(0,rand_norm(2100,SD*2100))"/>
+            <Property symbol="g_mZ" value="max(0,rand_norm(11,SD*11))"/>
+            <Property symbol="g_Z" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="k_mu2" value="max(0,rand_norm(0.0475,SD*0.0475))"/>
+            <Property symbol="k_mZ" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="k_Z" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="Z0_1" value="max(0,rand_norm(25000,SD*25000))"/>
+            <Property symbol="n_1" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_1" value="max(0,rand_norm(7.5,SD*7.5))"/>
+            <Property symbol="Z0_2" value="max(0,rand_norm(220000,SD*220000))"/>
+            <Property symbol="n_2" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="l_2" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="S0_3" value="max(0,rand_norm(180000,SD*180000))"/>
+            <Property symbol="n_3" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_3" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="S0_4" value="max(0,rand_norm(180000,SD*180000))"/>
+            <Property symbol="n_4" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_4" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="j_mZ_1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="j_mZ_2" value="max(0,rand_norm(0.04,SD*0.04))"/>
+            <Property symbol="j_mZ_3" value="max(0,rand_norm(0.2,SD*0.2))"/>
+            <Property symbol="j_mZ_4" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_5" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_6" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_7" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mu2_1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="j_mu2_2" value="max(0,rand_norm(0.005,SD*0.005))"/>
+            <Property symbol="j_mu2_3" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="j_mu2_4" value="max(0,rand_norm(1.5,SD*1.5))"/>
+            <Property symbol="j_mu2_5" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="j_mu2_6" value="max(0,rand_norm(2.5,SD*2.5))"/>
+            <Property symbol="j_mu2_7" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="f_1" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="f_2" value="max(0,rand_norm(0.6,SD*0.6))"/>
+            <Property symbol="f_3" value="max(0,rand_norm(0.3,SD*0.3))"/>
+            <Property symbol="f_4" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="f_5" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="f_6" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="f_7" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="mu2_0" value="max(0,rand_norm(10000,SD*10000))"/>
+            <Property symbol="kEG" value="max(0,rand_norm(1.68,SD*1.68))"/>
+            <Property symbol="kGM" value="max(0,rand_norm(1.8,SD*1.8))"/>
+            <Property symbol="kPM" value="max(0,rand_norm(0.15,SD*0.15))"/>
+            <Property symbol="gP" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="ltP1" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="ltP2" value="max(0,rand_norm(0.3,SD*0.3))"/>
+            <Property symbol="ltP3" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="lmumP1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="lmumP2" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="lmumP3" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="kmP" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="lmP1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="lmP2" value="max(0,rand_norm(0.2,SD*0.2))"/>
+            <Property symbol="lmP3" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="gmP" value="max(0,rand_norm(30,SD*30))"/>
+            <Property symbol="lamF" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="nF" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="F0" value="max(0,rand_norm(100000,SD*100000))"/>
+            <Property symbol="gF" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="kF" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="gmF" value="max(0,rand_norm(30,SD*30))"/>
+            <Property symbol="lamx7" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="nx7" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="x70" value="max(0,rand_norm(2000000,SD*2000000))"/>
+            <Property symbol="b" value="min(0,rand_norm(-51.52794,SD*-51.52794))"/>
+            <Property symbol="d" value="max(0,rand_norm(414.56394,SD*414.56394))"/>
+            <Property symbol="e" value="max(0,rand_norm(0.02833,SD*0.02833))"/>
+            <Property symbol="kmF" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="g0mS" value="max(0,rand_norm(1500,SD*1500))"/>
+            <Property symbol="gmS" value="max(0,rand_norm(600,SD*600))"/>
+            <Property symbol="JmS0" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="JmS1" value="max(0,rand_norm(4033400,SD*4033400))"/>
+            <Property symbol="kmS" value="max(0,rand_norm(0.09,SD*0.09))"/>
+            <Property symbol="gS" value="max(0,rand_norm(17,SD*17))"/>
+            <Property symbol="kS" value="max(0,rand_norm(1.66,SD*1.66))"/>
+            <Property symbol="IFN_conv" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="TGF_conv" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="n_nt" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="n_ns" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="gIFN" value="0.0"/>
+        </CellType>
+        <CellType class="biological" name="hybrid">
+            <Property symbol="Z" value="0.0"/>
+            <Property symbol="mu2" value="0.0"/>
+            <Property symbol="mZ" value="0.0"/>
+            <Property symbol="mF" value="0.0"/>
+            <Property symbol="F" value="0.0"/>
+            <Property symbol="mP" value="0.0"/>
+            <Property symbol="PE" value="0.0"/>
+            <Property symbol="PG" value="0.0"/>
+            <Property symbol="PM" value="0.0"/>
+            <Property symbol="mS" value="0.0"/>
+            <Property symbol="S" value="0.0"/>
+            <Property symbol="IFN_nM" value="0.0"/>
+            <Property symbol="TGF_nM" value="TGF_constant*TGF_conv"/>
+            <SurfaceConstraint strength="0.2" target="37.7" mode="surface"/>
+            <VolumeConstraint strength="1" target="113"/>
+            <Property symbol="IFN_local" value="0.0"/>
+            <Mapper name="report field">
+                <Input value="IFN"/>
+                <Output symbol-ref="IFN_local" mapping="sum"/>
+            </Mapper>
+            <Property symbol="gI" value="0.0"/>
+            <Property symbol="kIFN" value="0.021/113*0.01"/>
+            <ChangeCellType newCellType="mesenchymal">
+                <Condition>mZ>=715</Condition>
+            </ChangeCellType>
+            <ChangeCellType newCellType="epithelial">
+                <Condition>mZ&lt;=145</Condition>
+            </ChangeCellType>
+            <System time-scaling="30" solver="Dormand-Prince [adaptive, O(5)]">
+                <DiffEqn symbol-ref="Z">
+                    <Expression>g_Z * mZ * Y(mu2_0,f_1,f_2,f_3,f_4,f_5,f_6,f_7) - k_Z * Z</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mu2">
+                    <Expression>g_mu2 * Hs(Z, Z0_2,n_2,l_2) * Hs(S,S0_4,n_4,l_4) - mZ * Y(mu2_0,j_mu2_1,j_mu2_2,j_mu2_3,j_mu2_4,j_mu2_5,j_mu2_6,j_mu2_7) - mP * Y2(mu2_0,lmumP1,lmumP2,lmumP3) - k_mu2 * mu2</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mZ">
+                    <Expression>g_mZ * Hs(Z,Z0_1,n_1,l_1) * Hs(S,S0_3,n_3,l_3) - mZ * Y(mu2_0,j_mZ_1,j_mZ_2,j_mZ_3,j_mZ_4,j_mZ_5,j_mZ_6,j_mZ_7) - k_mZ * mZ</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mF">
+                    <Expression>gmF*Hs(x7,x70,nx7,lamx7)-kmF*mF</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="F">
+                    <Expression>gF * mF - kF*F</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mP">
+                    <Expression>gmP * Hs(F,F0,nF,lamF) - mP * Y2(mu2_0,lmP1,lmP2,lmP3) - kmP * mP</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PE">
+                    <Expression>gP * mP*Y2(mu2_0,ltP1,ltP2,ltP3) - kEG*PE</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PG">
+                    <Expression>kEG*PE-kGM*PG</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PM">
+                    <Expression>kGM*PG-kPM*PM</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mS">
+                    <Expression>g0mS + gmS*(TGF_nM/JmS0)^n_nt/(1+(TGF_nM/JmS0)^n_nt)*1/(1+(S/JmS1)^n_ns) - kmS*mS</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="S">
+                    <Expression>gS*mS - kS*S</Expression>
+                </DiffEqn>
+                <Function symbol="Y2">
+                    <Expression>j1/(1+mu2/mu0)^2+j2*(mu2/mu0)/(1+mu2/mu0)^2*2 +j3*(mu2/mu0)^2/(1+mu2/mu0)^2</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                </Function>
+                <Function symbol="Y">
+                    <Expression>j1/(1+mu2/mu0)^6+j2*(mu2/mu0)/(1+mu2/mu0)^6*6 +j3*(mu2/mu0)^2/(1+mu2/mu0)^6*15+j4*(mu2/mu0)^3/(1+mu2/mu0)^6*20+j5*(mu2/mu0)^4/(1+mu2/mu0)^6*15+j6*(mu2/mu0)^5/(1+mu2/mu0)^6*6+j7*(mu2/mu0)^6/(1+mu2/mu0)^6</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                    <Parameter symbol="j4"/>
+                    <Parameter symbol="j5"/>
+                    <Parameter symbol="j6"/>
+                    <Parameter symbol="j7"/>
+                </Function>
+                <Function symbol="Hs">
+                    <Expression>(1-l)/(1+(B/B0)^nB)+l</Expression>
+                    <Parameter symbol="B"/>
+                    <Parameter symbol="B0"/>
+                    <Parameter symbol="nB"/>
+                    <Parameter symbol="l"/>
+                </Function>
+                <Function symbol="x7">
+                    <Expression>6020*((d)*exp(-exp(b*(IFN_nM-e))))</Expression>
+                </Function>
+            </System>
+            <Equation symbol-ref="IFN_nM">
+                <Expression>IFN_local*0.0002294176894*IFN_conv</Expression>
+            </Equation>
+            <Property symbol="g_mu2" value="max(0,rand_norm(2100,SD*2100))"/>
+            <Property symbol="g_mZ" value="max(0,rand_norm(11,SD*11))"/>
+            <Property symbol="g_Z" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="k_mu2" value="max(0,rand_norm(0.0475,SD*0.0475))"/>
+            <Property symbol="k_mZ" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="k_Z" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="Z0_1" value="max(0,rand_norm(25000,SD*25000))"/>
+            <Property symbol="n_1" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_1" value="max(0,rand_norm(7.5,SD*7.5))"/>
+            <Property symbol="Z0_2" value="max(0,rand_norm(220000,SD*220000))"/>
+            <Property symbol="n_2" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="l_2" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="S0_3" value="max(0,rand_norm(180000,SD*180000))"/>
+            <Property symbol="n_3" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_3" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="S0_4" value="max(0,rand_norm(180000,SD*180000))"/>
+            <Property symbol="n_4" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_4" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="j_mZ_1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="j_mZ_2" value="max(0,rand_norm(0.04,SD*0.04))"/>
+            <Property symbol="j_mZ_3" value="max(0,rand_norm(0.2,SD*0.2))"/>
+            <Property symbol="j_mZ_4" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_5" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_6" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_7" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mu2_1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="j_mu2_2" value="max(0,rand_norm(0.005,SD*0.005))"/>
+            <Property symbol="j_mu2_3" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="j_mu2_4" value="max(0,rand_norm(1.5,SD*1.5))"/>
+            <Property symbol="j_mu2_5" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="j_mu2_6" value="max(0,rand_norm(2.5,SD*2.5))"/>
+            <Property symbol="j_mu2_7" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="f_1" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="f_2" value="max(0,rand_norm(0.6,SD*0.6))"/>
+            <Property symbol="f_3" value="max(0,rand_norm(0.3,SD*0.3))"/>
+            <Property symbol="f_4" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="f_5" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="f_6" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="f_7" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="mu2_0" value="max(0,rand_norm(10000,SD*10000))"/>
+            <Property symbol="kEG" value="max(0,rand_norm(1.68,SD*1.68))"/>
+            <Property symbol="kGM" value="max(0,rand_norm(1.8,SD*1.8))"/>
+            <Property symbol="kPM" value="max(0,rand_norm(0.15,SD*0.15))"/>
+            <Property symbol="gP" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="ltP1" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="ltP2" value="max(0,rand_norm(0.3,SD*0.3))"/>
+            <Property symbol="ltP3" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="lmumP1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="lmumP2" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="lmumP3" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="kmP" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="lmP1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="lmP2" value="max(0,rand_norm(0.2,SD*0.2))"/>
+            <Property symbol="lmP3" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="gmP" value="max(0,rand_norm(30,SD*30))"/>
+            <Property symbol="lamF" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="nF" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="F0" value="max(0,rand_norm(100000,SD*100000))"/>
+            <Property symbol="gF" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="kF" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="gmF" value="max(0,rand_norm(30,SD*30))"/>
+            <Property symbol="lamx7" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="nx7" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="x70" value="max(0,rand_norm(2000000,SD*2000000))"/>
+            <Property symbol="b" value="min(0,rand_norm(-51.52794,SD*-51.52794))"/>
+            <Property symbol="d" value="max(0,rand_norm(414.56394,SD*414.56394))"/>
+            <Property symbol="e" value="max(0,rand_norm(0.02833,SD*0.02833))"/>
+            <Property symbol="kmF" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="g0mS" value="max(0,rand_norm(1500,SD*1500))"/>
+            <Property symbol="gmS" value="max(0,rand_norm(600,SD*600))"/>
+            <Property symbol="JmS0" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="JmS1" value="max(0,rand_norm(4033400,SD*4033400))"/>
+            <Property symbol="kmS" value="max(0,rand_norm(0.09,SD*0.09))"/>
+            <Property symbol="gS" value="max(0,rand_norm(17,SD*17))"/>
+            <Property symbol="kS" value="max(0,rand_norm(1.66,SD*1.66))"/>
+            <Property symbol="IFN_conv" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="TGF_conv" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="n_nt" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="n_ns" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="gIFN" value="0.0"/>
+        </CellType>
+        <CellType class="biological" name="mesenchymal">
+            <Property symbol="Z" value="0.0"/>
+            <Property symbol="mu2" value="0.0"/>
+            <Property symbol="mZ" value="0"/>
+            <Property symbol="mF" value="0.0"/>
+            <Property symbol="F" value="0.0"/>
+            <Property symbol="mP" value="0.0"/>
+            <Property symbol="PE" value="0.0"/>
+            <Property symbol="PG" value="0.0"/>
+            <Property symbol="PM" value="0.0"/>
+            <Property symbol="mS" value="0.0"/>
+            <Property symbol="S" value="0.0"/>
+            <Property symbol="IFN_nM" value="0.0"/>
+            <Property symbol="TGF_nM" value="TGF_constant*TGF_conv"/>
+            <SurfaceConstraint strength="0.15" target="37.7" mode="surface"/>
+            <VolumeConstraint strength="1" target="113"/>
+            <Property symbol="IFN_local" value="0.0"/>
+            <Mapper name="report field">
+                <Input value="IFN"/>
+                <Output symbol-ref="IFN_local" mapping="sum"/>
+            </Mapper>
+            <Property symbol="gI" value="0.0"/>
+            <Property symbol="kIFN" value="0.021/113*0.01"/>
+            <ChangeCellType newCellType="epithelial">
+                <Condition>mZ&lt;=370</Condition>
+            </ChangeCellType>
+            <System time-scaling="30" solver="Dormand-Prince [adaptive, O(5)]">
+                <DiffEqn symbol-ref="Z">
+                    <Expression>g_Z * mZ * Y(mu2_0,f_1,f_2,f_3,f_4,f_5,f_6,f_7) - k_Z * Z</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mu2">
+                    <Expression>g_mu2 * Hs(Z, Z0_2,n_2,l_2) * Hs(S,S0_4,n_4,l_4) - mZ * Y(mu2_0,j_mu2_1,j_mu2_2,j_mu2_3,j_mu2_4,j_mu2_5,j_mu2_6,j_mu2_7) - mP * Y2(mu2_0,lmumP1,lmumP2,lmumP3) - k_mu2 * mu2</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mZ">
+                    <Expression>g_mZ * Hs(Z,Z0_1,n_1,l_1) * Hs(S,S0_3,n_3,l_3) - mZ * Y(mu2_0,j_mZ_1,j_mZ_2,j_mZ_3,j_mZ_4,j_mZ_5,j_mZ_6,j_mZ_7) - k_mZ * mZ</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mF">
+                    <Expression>gmF*Hs(x7,x70,nx7,lamx7)-kmF*mF</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="F">
+                    <Expression>gF * mF - kF*F</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mP">
+                    <Expression>gmP * Hs(F,F0,nF,lamF) - mP * Y2(mu2_0,lmP1,lmP2,lmP3) - kmP * mP</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PE">
+                    <Expression>gP * mP*Y2(mu2_0,ltP1,ltP2,ltP3) - kEG*PE</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PG">
+                    <Expression>kEG*PE-kGM*PG</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="PM">
+                    <Expression>kGM*PG-kPM*PM</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="mS">
+                    <Expression>g0mS + gmS*(TGF_nM/JmS0)^n_nt/(1+(TGF_nM/JmS0)^n_nt)*1/(1+(S/JmS1)^n_ns) - kmS*mS</Expression>
+                </DiffEqn>
+                <DiffEqn symbol-ref="S">
+                    <Expression>gS*mS - kS*S</Expression>
+                </DiffEqn>
+                <Function symbol="Y2">
+                    <Expression>j1/(1+mu2/mu0)^2+j2*(mu2/mu0)/(1+mu2/mu0)^2*2 +j3*(mu2/mu0)^2/(1+mu2/mu0)^2</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                </Function>
+                <Function symbol="Y">
+                    <Expression>j1/(1+mu2/mu0)^6+j2*(mu2/mu0)/(1+mu2/mu0)^6*6 +j3*(mu2/mu0)^2/(1+mu2/mu0)^6*15+j4*(mu2/mu0)^3/(1+mu2/mu0)^6*20+j5*(mu2/mu0)^4/(1+mu2/mu0)^6*15+j6*(mu2/mu0)^5/(1+mu2/mu0)^6*6+j7*(mu2/mu0)^6/(1+mu2/mu0)^6</Expression>
+                    <Parameter symbol="mu0"/>
+                    <Parameter symbol="j1"/>
+                    <Parameter symbol="j2"/>
+                    <Parameter symbol="j3"/>
+                    <Parameter symbol="j4"/>
+                    <Parameter symbol="j5"/>
+                    <Parameter symbol="j6"/>
+                    <Parameter symbol="j7"/>
+                </Function>
+                <Function symbol="Hs">
+                    <Expression>(1-l)/(1+(B/B0)^nB)+l</Expression>
+                    <Parameter symbol="B"/>
+                    <Parameter symbol="B0"/>
+                    <Parameter symbol="nB"/>
+                    <Parameter symbol="l"/>
+                </Function>
+                <Function symbol="x7">
+                    <Expression>6020*((d)*exp(-exp(b*(IFN_nM-e))))</Expression>
+                </Function>
+            </System>
+            <Equation symbol-ref="IFN_nM">
+                <Expression>IFN_local*0.0002294176894*IFN_conv</Expression>
+            </Equation>
+            <Property symbol="g_mu2" value="max(0,rand_norm(2100,SD*2100))"/>
+            <Property symbol="g_mZ" value="max(0,rand_norm(11,SD*11))"/>
+            <Property symbol="g_Z" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="k_mu2" value="max(0,rand_norm(0.0475,SD*0.0475))"/>
+            <Property symbol="k_mZ" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="k_Z" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="Z0_1" value="max(0,rand_norm(25000,SD*25000))"/>
+            <Property symbol="n_1" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_1" value="max(0,rand_norm(7.5,SD*7.5))"/>
+            <Property symbol="Z0_2" value="max(0,rand_norm(220000,SD*220000))"/>
+            <Property symbol="n_2" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="l_2" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="S0_3" value="max(0,rand_norm(180000,SD*180000))"/>
+            <Property symbol="n_3" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_3" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="S0_4" value="max(0,rand_norm(180000,SD*180000))"/>
+            <Property symbol="n_4" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="l_4" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="j_mZ_1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="j_mZ_2" value="max(0,rand_norm(0.04,SD*0.04))"/>
+            <Property symbol="j_mZ_3" value="max(0,rand_norm(0.2,SD*0.2))"/>
+            <Property symbol="j_mZ_4" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_5" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_6" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mZ_7" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="j_mu2_1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="j_mu2_2" value="max(0,rand_norm(0.005,SD*0.005))"/>
+            <Property symbol="j_mu2_3" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="j_mu2_4" value="max(0,rand_norm(1.5,SD*1.5))"/>
+            <Property symbol="j_mu2_5" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="j_mu2_6" value="max(0,rand_norm(2.5,SD*2.5))"/>
+            <Property symbol="j_mu2_7" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="f_1" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="f_2" value="max(0,rand_norm(0.6,SD*0.6))"/>
+            <Property symbol="f_3" value="max(0,rand_norm(0.3,SD*0.3))"/>
+            <Property symbol="f_4" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="f_5" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="f_6" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="f_7" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="mu2_0" value="max(0,rand_norm(10000,SD*10000))"/>
+            <Property symbol="kEG" value="max(0,rand_norm(1.68,SD*1.68))"/>
+            <Property symbol="kGM" value="max(0,rand_norm(1.8,SD*1.8))"/>
+            <Property symbol="kPM" value="max(0,rand_norm(0.15,SD*0.15))"/>
+            <Property symbol="gP" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="ltP1" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="ltP2" value="max(0,rand_norm(0.3,SD*0.3))"/>
+            <Property symbol="ltP3" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="lmumP1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="lmumP2" value="max(0,rand_norm(0.05,SD*0.05))"/>
+            <Property symbol="lmumP3" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="kmP" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="lmP1" value="max(0,rand_norm(0,SD*0))"/>
+            <Property symbol="lmP2" value="max(0,rand_norm(0.2,SD*0.2))"/>
+            <Property symbol="lmP3" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="gmP" value="max(0,rand_norm(30,SD*30))"/>
+            <Property symbol="lamF" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="nF" value="max(0,rand_norm(3,SD*3))"/>
+            <Property symbol="F0" value="max(0,rand_norm(100000,SD*100000))"/>
+            <Property symbol="gF" value="max(0,rand_norm(100,SD*100))"/>
+            <Property symbol="kF" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="gmF" value="max(0,rand_norm(30,SD*30))"/>
+            <Property symbol="lamx7" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="nx7" value="max(0,rand_norm(10,SD*10))"/>
+            <Property symbol="x70" value="max(0,rand_norm(2000000,SD*2000000))"/>
+            <Property symbol="b" value="min(0,rand_norm(-51.52794,SD*-51.52794))"/>
+            <Property symbol="d" value="max(0,rand_norm(414.56394,SD*414.56394))"/>
+            <Property symbol="e" value="max(0,rand_norm(0.02833,SD*0.02833))"/>
+            <Property symbol="kmF" value="max(0,rand_norm(0.5,SD*0.5))"/>
+            <Property symbol="g0mS" value="max(0,rand_norm(1500,SD*1500))"/>
+            <Property symbol="gmS" value="max(0,rand_norm(600,SD*600))"/>
+            <Property symbol="JmS0" value="max(0,rand_norm(0.1,SD*0.1))"/>
+            <Property symbol="JmS1" value="max(0,rand_norm(4033400,SD*4033400))"/>
+            <Property symbol="kmS" value="max(0,rand_norm(0.09,SD*0.09))"/>
+            <Property symbol="gS" value="max(0,rand_norm(17,SD*17))"/>
+            <Property symbol="kS" value="max(0,rand_norm(1.66,SD*1.66))"/>
+            <Property symbol="IFN_conv" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="TGF_conv" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="n_nt" value="max(0,rand_norm(2,SD*2))"/>
+            <Property symbol="n_ns" value="max(0,rand_norm(1,SD*1))"/>
+            <Property symbol="gIFN" value="0.0"/>
+        </CellType>
+        <CellType class="biological" name="T-cell">
+            <SurfaceConstraint strength="0.1" target="20.97" mode="surface"/>
+            <VolumeConstraint strength="1" target="35"/>
+            <Property symbol="gI" value="0.0"/>
+            <Property symbol="kIFN" value="0.0"/>
+            <Protrusion strength="20" field="Act" maximum="20" name="Act"/>
+            <Property symbol="IFN_nM" value="0.0"/>
+            <Property symbol="PM" value="0.0"/>
+            <Property symbol="Z" value="0.0"/>
+            <Property symbol="TGF_nM" value="0"/>
+            <Property symbol="T_nM" value="TGF_constant"/>
+            <Property symbol="PM_local" value="0.0"/>
+            <NeighborhoodReporter>
+                <Input value="PM" scaling="length"/>
+                <Output symbol-ref="PM_local" mapping="average"/>
+            </NeighborhoodReporter>
+            <ConnectivityConstraint/>
+            <Property symbol="l_5" value="1"/>
+            <Property symbol="PM0_5" value="60000"/>
+            <Property symbol="n_5" value="2"/>
+            <Equation symbol-ref="gI">
+                <Expression>1200*((1-l_5)/(1+(PM_local/PM0_5)^n_5)+l_5)*((1-l_6)/(1+(T_nM/T0_6)^n_6)+l_6)</Expression>
+            </Equation>
+            <Property symbol="l_6" value="1"/>
+            <Property symbol="T0_6" value="0.1"/>
+            <Property symbol="n_6" value="2"/>
+            <Property symbol="gIFN" value="0.0"/>
+            <System solver="Dormand-Prince [adaptive, O(5)]">
+                <Rule symbol-ref="gIFN">
+                    <Expression>if(time&lt;=10, 0, gI/cell.volume)</Expression>
+                </Rule>
+            </System>
+            <FreezeMotion>
+                <Condition>if(time&lt;=10,1,0)</Condition>
+            </FreezeMotion>
+        </CellType>
+        <CellType class="biological" name="IFN_degr">
+            <SurfaceConstraint strength="1" target="1" mode="surface"/>
+            <VolumeConstraint strength="1" target="1"/>
+            <Property symbol="kIFN" value="1"/>
+            <Property symbol="IFN_nM" value="0"/>
+            <Property symbol="PM" value="0"/>
+            <Property symbol="Z" value="0"/>
+            <Property symbol="TGF_nM" value="0"/>
+            <FreezeMotion>
+                <Condition>1</Condition>
+            </FreezeMotion>
+            <Property symbol="gI" value="0"/>
+            <Property symbol="gIFN" value="0.0"/>
+        </CellType>
+    </CellTypes>
+    <Global>
+        <Field symbol="IFN" value="0">
+            <Diffusion rate="13.575"/>
+        </Field>
+        <Field symbol="Act" value="0.0"/>
+        <System time-step="1.0" solver="Runge-Kutta [fixed, O(4)]">
+            <DiffEqn symbol-ref="IFN">
+                <Expression>gIFN - kIFN*IFN</Expression>
+            </DiffEqn>
+        </System>
+        <Constant symbol="SD" value="0.01"/>
+        <Constant symbol="TGF_constant" value="0.07"/>
+    </Global>
+    <CPM>
+        <ShapeSurface scaling="norm">
+            <Neighborhood>
+                <Order>2</Order>
+            </Neighborhood>
+        </ShapeSurface>
+        <Interaction>
+            <Contact type2="epithelial" value="2" type1="epithelial"/>
+            <Contact type2="hybrid" value="5" type1="epithelial"/>
+            <Contact type2="mesenchymal" value="5" type1="epithelial"/>
+            <Contact type2="hybrid" value="14" type1="hybrid"/>
+            <Contact type2="mesenchymal" value="14" type1="hybrid"/>
+            <Contact type2="mesenchymal" value="14" type1="mesenchymal"/>
+            <Contact type2="medium" value="3" type1="epithelial"/>
+            <Contact type2="medium" value="1" type1="hybrid"/>
+            <Contact type2="medium" value="1" type1="mesenchymal"/>
+            <Contact type2="medium" value="15" type1="T-cell"/>
+            <Contact type2="epithelial" value="0.5" type1="T-cell"/>
+            <Contact type2="hybrid" value="0.5" type1="T-cell"/>
+            <Contact type2="mesenchymal" value="0.5" type1="T-cell"/>
+            <Contact type2="T-cell" value="0.5" type1="T-cell"/>
+            <Contact type2="IFN_degr" value="0" type1="epithelial"/>
+            <Contact type2="IFN_degr" value="0" type1="hybrid"/>
+            <Contact type2="IFN_degr" value="0" type1="mesenchymal"/>
+            <Contact type2="IFN_degr" value="0" type1="T-cell"/>
+        </Interaction>
+        <MonteCarloSampler stepper="edgelist">
+            <MCSDuration value="0.01"/>
+            <Neighborhood>
+                <Order>2</Order>
+            </Neighborhood>
+            <MetropolisKinetics temperature="1"/>
+        </MonteCarloSampler>
+    </CPM>
+    <CellPopulations>
+        <Population size="1" type="epithelial">
+            <InitCircle number-of-cells="480" mode="regular">
+                <Dimensions center="175, 175, 0.0" radius="100"/>
+            </InitCircle>
+        </Population>
+        <Population size="1" type="T-cell">
+            <InitCircle number-of-cells="12" mode="random">
+                <Dimensions center="175, 175, 0.0" radius="100"/>
+            </InitCircle>
+        </Population>
+        <Population size="1" type="IFN_degr">
+            <InitRectangle number-of-cells="350" mode="regular">
+                <Dimensions size="1.0, 349, 1" origin="0.0, 0.0, 0.0"/>
+            </InitRectangle>
+            <InitRectangle number-of-cells="350" mode="regular">
+                <Dimensions size="1.0, 350, 1.0" origin="349, 0, 0.0"/>
+            </InitRectangle>
+            <InitRectangle number-of-cells="350" mode="regular">
+                <Dimensions size="350, 1, 1.0" origin="0.0, 0.0, 0.0"/>
+            </InitRectangle>
+            <InitRectangle number-of-cells="350" mode="regular">
+                <Dimensions size="350, 1, 1.0" origin="0, 349, 0.0"/>
+            </InitRectangle>
+        </Population>
+    </CellPopulations>
+</MorpheusModel>

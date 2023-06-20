@@ -1,0 +1,21 @@
+Type: project
+Description: Model plus code to generate figures for Lems et al. 2023. 
+    Tumor-Mediated Immunosuppression and Cytokine Spreading Affects 
+    the Relation Between EMT and PD-L1 Status.
+    doi: 10.3389/fimmu.2023.1219669
+Imports:
+    rootSolve,
+    cowplot,
+    magick,
+    colorblindr,
+    tidyverse,
+    conicfit,
+    imager,
+    fs,
+    plotrix
+Suggests:
+    rmarkdown,
+    markdown,
+    knitr
+Remotes: 
+    clauswilke/colorblindr
